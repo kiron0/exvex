@@ -31,6 +31,7 @@ const hasRustc = commandExists("rustc");
 const hasJava = commandExists("javac") && commandExists("java");
 const hasKotlinc = commandExists("kotlinc") && commandExists("java");
 const hasRuby = commandExists("ruby");
+const SLOW_TOOLCHAIN_TEST_TIMEOUT_MS = 30000;
 
 function commandExists(command: string) {
   try {
@@ -520,48 +521,46 @@ describe("runFile", () => {
     ).rejects.toThrow("timeoutMs must be a non-negative integer.");
   });
 
-  it("includes an extensionless Go file in compilation sources rather than throwing 'No go sources found'", async () => {
-    const directory = await createTempDir("exvex-go-extensionless-");
-    const entryPath = join(directory, "solution");
+  it(
+    "includes an extensionless Go file in compilation sources rather than throwing 'No go sources found'",
+    async () => {
+      const directory = await createTempDir("exvex-go-extensionless-");
+      const entryPath = join(directory, "solution");
 
-    await writeFile(
-      entryPath,
-      [
-        "package main",
-        "",
-        'import "fmt"',
-        "",
-        "func main() {",
-        '  fmt.Println("hello")',
-        "}",
-      ].join("\n"),
-    );
+      await writeFile(
+        entryPath,
+        [
+          "package main",
+          "",
+          'import "fmt"',
+          "",
+          "func main() {",
+          '  fmt.Println("hello")',
+          "}",
+        ].join("\n"),
+      );
 
-    await expect(detectLanguageForFile(entryPath)).resolves.toBe("go");
+      await expect(detectLanguageForFile(entryPath)).resolves.toBe("go");
 
-    if (hasGo) {
-      const result = await runFile({
-        cwd: directory,
-        entryFile: "solution",
-        timeoutMs: 15000,
-      });
+      if (hasGo) {
+        const result = await runFile({
+          cwd: directory,
+          entryFile: "solution",
+          timeoutMs: 15000,
+        });
 
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout.trim()).toBe("hello");
-    } else {
-      // Without Go installed the error should be "command not found", proving
-      // we reached the compilation step rather than failing with the old
-      // misleading "No go sources found" error.
-      await expect(
-        runFile({ cwd: directory, entryFile: "solution", timeoutMs: 5000 }),
-      ).rejects.toThrow(/not found on PATH|No go sources found/);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout.trim()).toBe("hello");
+      } else {
+        await expect(
+          runFile({ cwd: directory, entryFile: "solution", timeoutMs: 5000 }),
+        ).rejects.toThrow(/not found on PATH/);
+      }
 
-      // Specifically ensure the old "No go sources found" message is gone.
-      await expect(
-        runFile({ cwd: directory, entryFile: "solution", timeoutMs: 5000 }),
-      ).rejects.not.toThrow("No go sources found");
-    }
-  });
+      await expect(stat(join(directory, "go.mod"))).rejects.toThrow();
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
   it("cleans temporary artifacts created by --no-cache", async () => {
     const directory = await createTempDir("exvex-runfile-");
@@ -772,70 +771,78 @@ describe("runFile", () => {
   const rustIt = hasRustc ? it : it.skip;
   const goIt = hasGo ? it : it.skip;
   const javaIt = hasJava ? it : it.skip;
-  goIt("runs multi-file go sources end to end", async () => {
-    const directory = await createTempDir("exvex-go-");
+  goIt(
+    "runs multi-file go sources end to end",
+    async () => {
+      const directory = await createTempDir("exvex-go-");
 
-    await writeFile(
-      join(directory, "main.go"),
-      ["package main", "func main() {", "    printMessage()", "}"].join("\n"),
-    );
-    await writeFile(
-      join(directory, "helper.go"),
-      [
-        "package main",
-        'import "fmt"',
-        "",
-        "func printMessage() {",
-        '    fmt.Println("go-ok")',
-        "}",
-      ].join("\n"),
-    );
+      await writeFile(
+        join(directory, "main.go"),
+        ["package main", "func main() {", "    printMessage()", "}"].join("\n"),
+      );
+      await writeFile(
+        join(directory, "helper.go"),
+        [
+          "package main",
+          'import "fmt"',
+          "",
+          "func printMessage() {",
+          '    fmt.Println("go-ok")',
+          "}",
+        ].join("\n"),
+      );
 
-    const result = await runFile({
-      cwd: directory,
-      entryFile: "main.go",
-      timeoutMs: 10000,
-    });
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "main.go",
+        timeoutMs: 10000,
+      });
 
-    expect(result.language).toBe("go");
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("go-ok");
-  });
+      expect(result.language).toBe("go");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("go-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
-  goIt("ignores _test.go files when building a Go program", async () => {
-    const directory = await createTempDir("exvex-go-testfiles-");
+  goIt(
+    "ignores _test.go files when building a Go program",
+    async () => {
+      const directory = await createTempDir("exvex-go-testfiles-");
 
-    await writeFile(
-      join(directory, "main.go"),
-      [
-        "package main",
-        'import "fmt"',
-        "",
-        "func main() {",
-        '    fmt.Println("go-main-ok")',
-        "}",
-      ].join("\n"),
-    );
-    await writeFile(
-      join(directory, "helper_test.go"),
-      [
-        "package main",
-        "",
-        'import "testing"',
-        "",
-        "func TestIgnored(t *testing.T) {}",
-      ].join("\n"),
-    );
+      await writeFile(
+        join(directory, "main.go"),
+        [
+          "package main",
+          'import "fmt"',
+          "",
+          "func main() {",
+          '    fmt.Println("go-main-ok")',
+          "}",
+        ].join("\n"),
+      );
+      await writeFile(
+        join(directory, "helper_test.go"),
+        [
+          "package main",
+          "",
+          'import "testing"',
+          "",
+          "func TestIgnored(t *testing.T) {}",
+        ].join("\n"),
+      );
 
-    const result = await runFile({
-      cwd: directory,
-      entryFile: "main.go",
-      timeoutMs: 10000,
-    });
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "main.go",
+        timeoutMs: 10000,
+      });
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("go-main-ok");
-  });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("go-main-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
   goIt("ignores nested Go files from subdirectories", async () => {
     const directory = await createTempDir("exvex-go-nested-dir-");
@@ -1015,28 +1022,32 @@ describe("runFile", () => {
   });
 
   const kotlinIt = hasKotlinc ? it : it.skip;
-  kotlinIt("runs multi-file kotlin sources end to end", async () => {
-    const directory = await createTempDir("exvex-kotlin-");
+  kotlinIt(
+    "runs multi-file kotlin sources end to end",
+    async () => {
+      const directory = await createTempDir("exvex-kotlin-");
 
-    await writeFile(
-      join(directory, "Main.kt"),
-      ["fun main() {", "    printMessage()", "}"].join("\n"),
-    );
-    await writeFile(
-      join(directory, "Helper.kt"),
-      ["fun printMessage() {", '    println("kt-ok")', "}"].join("\n"),
-    );
+      await writeFile(
+        join(directory, "Main.kt"),
+        ["fun main() {", "    printMessage()", "}"].join("\n"),
+      );
+      await writeFile(
+        join(directory, "Helper.kt"),
+        ["fun printMessage() {", '    println("kt-ok")', "}"].join("\n"),
+      );
 
-    const result = await runFile({
-      cwd: directory,
-      entryFile: "Main.kt",
-      timeoutMs: 15000,
-    });
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "Main.kt",
+        timeoutMs: 15000,
+      });
 
-    expect(result.language).toBe("kotlin");
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("kt-ok");
-  });
+      expect(result.language).toBe("kotlin");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("kt-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
   const rubyIt = hasRuby ? it : it.skip;
   rubyIt("runs ruby sources end to end", async () => {

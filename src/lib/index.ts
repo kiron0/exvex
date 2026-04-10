@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { createHash } from "crypto";
 import {
   access,
+  copyFile,
   mkdir,
   mkdtemp,
   readFile,
@@ -592,46 +593,31 @@ async function prepareNativeExecution({
 
   if (!useCache || !(await pathExists(artifactPath))) {
     await mkdir(artifactDir, { recursive: true });
-
-    // Go-specific setup: we build with `go build .` (package dot notation)
-    // rather than passing individual file paths. Passing absolute paths to
-    // `go build` causes Go to treat them as import paths relative to the
-    // module root, leading to "does not contain package" errors.
-    // We also auto-create a minimal go.mod if none exists, because modern Go
-    // (1.16+) requires module-aware mode even for single-file CP scripts.
     const sourceDir = dirname(entryPath);
+    let compileTarget = entryPath;
+    let compileCwd = cwd;
 
     if (language === "go") {
-      let goModFound = false;
-      let dir = sourceDir;
+      // Build Go in an isolated staging directory so we can support
+      // extensionless detected entry files without mutating the user's source
+      // directory or relying on a local go.mod file.
+      const stagedSourceDir = join(artifactDir, "go-src");
+      await rm(stagedSourceDir, { recursive: true, force: true });
+      await mkdir(stagedSourceDir, { recursive: true });
 
-      for (;;) {
-        if (await pathExists(join(dir, "go.mod"))) {
-          goModFound = true;
-          break;
-        }
-
-        const parent = dirname(dir);
-
-        if (parent === dir) {
-          break;
-        }
-
-        dir = parent;
+      let syntheticIndex = 0;
+      for (const sourceFile of sourceFiles) {
+        const stagedName = sourceFile.endsWith(".go")
+          ? basename(sourceFile)
+          : `__exvex_${syntheticIndex += 1}.go`;
+        await copyFile(sourceFile, join(stagedSourceDir, stagedName));
       }
 
-      if (!goModFound) {
-        await writeFile(
-          join(sourceDir, "go.mod"),
-          "module solution\n\ngo 1.21\n",
-        );
-      }
+      await writeFile(join(stagedSourceDir, "go.mod"), "module solution\n\ngo 1.21\n");
+      compileTarget = ".";
+      compileCwd = stagedSourceDir;
     }
 
-    // For Go: build the package in the source directory ("go build . ").
-    // For other languages: pass the entry file path directly.
-    const [compileTarget, compileCwd] =
-      language === "go" ? [".", sourceDir] : [entryPath, cwd];
     const compileArgs =
       language === "go"
         ? [...compileParts.slice(1), "-o", artifactPath, compileTarget]
