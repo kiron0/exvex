@@ -38,32 +38,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Check if package version changed
-        id: version_guard
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Manual dispatch: bypassing version-change guard."
-            exit 0
-          fi
-
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-          PREVIOUS_VERSION=$(git show HEAD^:package.json 2>/dev/null | node -e "let raw=''; process.stdin.on('data', (chunk) => raw += chunk); process.stdin.on('end', () => { try { const parsed = JSON.parse(raw); console.log(parsed.version ?? ''); } catch { console.log(''); } });")
-
-          if [ -z "$PREVIOUS_VERSION" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "No previous package.json version found; allowing release."
-          elif [ "$CURRENT_VERSION" = "$PREVIOUS_VERSION" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "package.json version unchanged ($CURRENT_VERSION); skipping release."
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "package.json version changed: $PREVIOUS_VERSION -> $CURRENT_VERSION"
-          fi
-
       - name: Resolve release metadata
-        if: steps.version_guard.outputs.changed == 'true'
         id: meta
         shell: bash
         run: |
@@ -79,7 +54,6 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Check if release already exists
-        if: steps.version_guard.outputs.changed == 'true'
         id: check_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -91,6 +65,36 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "Release does not exist for ${{ steps.meta.outputs.tag }}. Creating one."
+          fi
+
+      - name: Check if package version changed
+        id: version_guard
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch: bypassing version-change guard."
+            exit 0
+          fi
+
+          if [ "${{ steps.check_release.outputs.exists }}" = "false" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "No release exists for ${{ steps.meta.outputs.tag }}; allowing release."
+            exit 0
+          fi
+
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          PREVIOUS_VERSION=$(git show HEAD^:package.json 2>/dev/null | node -e "let raw=''; process.stdin.on('data', (chunk) => raw += chunk); process.stdin.on('end', () => { try { const parsed = JSON.parse(raw); console.log(parsed.version ?? ''); } catch { console.log(''); } });")
+
+          if [ -z "$PREVIOUS_VERSION" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "No previous package.json version found; allowing release."
+          elif [ "$CURRENT_VERSION" = "$PREVIOUS_VERSION" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "package.json version unchanged ($CURRENT_VERSION); skipping release."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "package.json version changed: $PREVIOUS_VERSION -> $CURRENT_VERSION"
           fi
 
       - name: Install dependencies
