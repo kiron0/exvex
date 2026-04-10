@@ -1,0 +1,46 @@
+{
+  "name": "exvex",
+  "description": "A fast CLI runner and judge for competitive programming workflows.",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "exvex": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run tests/cli.test.ts tests/lib.test.ts",
+    "test:build": "vitest run tests/build.test.ts",
+    "test:pack": "vitest run tests/tarball.test.ts",
+    "test:smoke": "npm run build && node dist/index.js --help",
+    "test:e2e:live": "vitest run tests/live-e2e.test.ts",
+    "build:watch": "tsup --watch",
+    "format": "prettier --write \"**/*.{ts,json,md}\""
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "prettier": "^3.8.2",
+    "terser": "^5.46.1",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.4"
+  },
+  "keywords": [
+    "cli",
+    "competitive-programming",
+    "judge",
+    "runner",
+    "stress-testing"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@clack/prompts": "^1.2.0"
+  }
+}
