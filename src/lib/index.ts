@@ -609,7 +609,7 @@ async function prepareNativeExecution({
       for (const sourceFile of sourceFiles) {
         const stagedName = sourceFile.endsWith(".go")
           ? basename(sourceFile)
-          : `__exvex_${(syntheticIndex += 1)}.go`;
+          : `exvex_${(syntheticIndex += 1)}.go`;
         await copyFile(sourceFile, join(stagedSourceDir, stagedName));
       }
 
