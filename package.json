@@ -9,8 +9,8 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run tests/cli.test.ts tests/lib.test.ts",
-    "test:build": "node --experimental-strip-types scripts/test-build.ts",
-    "test:pack": "npm pack --dry-run --json --cache .npm-cache > .exvex-pack.json && node --experimental-strip-types scripts/test-pack.ts",
+    "test:build": "bun scripts/test-build.ts",
+    "test:pack": "npm pack --dry-run --json --cache .npm-cache > .exvex-pack.json && bun scripts/test-pack.ts",
     "test:smoke": "node dist/index.js --help",
     "test:e2e:live": "vitest run tests/live-e2e.test.ts",
     "build:watch": "tsup --watch",
@@ -22,7 +22,7 @@
     "terser": "^5.46.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.4"
   },
   "keywords": [
     "cli",

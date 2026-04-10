@@ -349,6 +349,18 @@ describe("resolveEntryFile", () => {
     await expect(detectLanguageForFile(entryPath)).resolves.toBe("python");
     await expect(resolveEntryFile(directory, "main")).resolves.toBe(entryPath);
   });
+
+  it("detects extensionless JavaScript files that use ESM imports", async () => {
+    const directory = await createTempDir("exvex-entry-js-esm-");
+    const entryPath = join(directory, "main");
+
+    await writeFile(
+      entryPath,
+      ['import "node:fs";', "export default 42;"].join("\n"),
+    );
+
+    await expect(detectLanguageForFile(entryPath)).resolves.toBe("javascript");
+  });
 });
 
 describe("output helpers", () => {
@@ -1084,6 +1096,68 @@ describe("runFile", () => {
     expect(result.stdout).toContain("java-nested-ok");
   });
 
+  javaIt(
+    "runs an extensionless Java entry file detected from its contents",
+    async () => {
+      const directory = await createTempDir("exvex-java-extensionless-");
+      const entryPath = join(directory, "Main");
+
+      await writeFile(
+        entryPath,
+        [
+          "public class Main {",
+          "  public static void main(String[] args) {",
+          '    System.out.println("java-extensionless-ok");',
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+
+      await expect(detectLanguageForFile(entryPath)).resolves.toBe("java");
+
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "Main",
+        timeoutMs: 15000,
+      });
+
+      expect(result.language).toBe("java");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("java-extensionless-ok");
+    },
+  );
+
+  javaIt(
+    "runs an extensionless Java entry file whose filename differs from the declared main class",
+    async () => {
+      const directory = await createTempDir("exvex-java-extensionless-rename-");
+      const entryPath = join(directory, "solution");
+
+      await writeFile(
+        entryPath,
+        [
+          "public class Main {",
+          "  public static void main(String[] args) {",
+          '    System.out.println("java-extensionless-rename-ok");',
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+
+      await expect(detectLanguageForFile(entryPath)).resolves.toBe("java");
+
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "solution",
+        timeoutMs: 15000,
+      });
+
+      expect(result.language).toBe("java");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("java-extensionless-rename-ok");
+    },
+  );
+
   const kotlinIt = hasKotlinc ? it : it.skip;
   kotlinIt(
     "runs multi-file kotlin sources end to end",
@@ -1108,6 +1182,32 @@ describe("runFile", () => {
       expect(result.language).toBe("kotlin");
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("kt-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
+
+  kotlinIt(
+    "runs an extensionless Kotlin entry file detected from its contents",
+    async () => {
+      const directory = await createTempDir("exvex-kotlin-extensionless-");
+      const entryPath = join(directory, "Main");
+
+      await writeFile(
+        entryPath,
+        ["fun main() {", '    println("kt-extensionless-ok")', "}"].join("\n"),
+      );
+
+      await expect(detectLanguageForFile(entryPath)).resolves.toBe("kotlin");
+
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "Main",
+        timeoutMs: 15000,
+      });
+
+      expect(result.language).toBe("kotlin");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("kt-extensionless-ok");
     },
     SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
   );

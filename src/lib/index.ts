@@ -12,7 +12,15 @@ import {
   writeFile,
 } from "fs/promises";
 import { tmpdir } from "os";
-import { basename, dirname, extname, isAbsolute, join, resolve } from "path";
+import {
+  basename,
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "path";
 import type {
   ExvexConfig,
   JudgeCase,
@@ -68,6 +76,14 @@ interface DetectedSourceFile {
   name: string;
   path: string;
   language: SupportedLanguage;
+}
+
+function getJavaDeclaredMainClassName(content: string) {
+  const classMatch = content.match(
+    /^\s*(?:public\s+)?(?:final\s+)?class\s+([A-Za-z_]\w*)/m,
+  );
+
+  return classMatch?.[1] ?? null;
 }
 
 function terminateProcessTree(pid: number) {
@@ -197,7 +213,7 @@ function detectLanguageFromContent(content: string): SupportedLanguage | null {
   }
 
   if (
-    /^\s*public\s+(?:final\s+)?class\s+\w+/m.test(content) &&
+    /^\s*(?:public\s+)?(?:final\s+)?class\s+\w+/m.test(content) &&
     /^\s*public\s+static\s+void\s+main\s*\(/m.test(content)
   ) {
     return "java";
@@ -228,6 +244,10 @@ function detectLanguageFromContent(content: string): SupportedLanguage | null {
   }
 
   if (
+    /^\s*import\s+(?:[\w*\s{},]*\s+from\s+)?["'][^"']+["'];?/m.test(content) ||
+    /^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|\{)/m.test(
+      content,
+    ) ||
     /^\s*(const|let|var)\s+\w+/m.test(content) ||
     /\bconsole\.(log|error|warn)\s*\(/.test(content) ||
     /\bmodule\.exports\b/.test(content) ||
@@ -571,6 +591,57 @@ async function getCompilationSourceFiles(
   return [...new Set([...scannedFiles, entryPath])].sort();
 }
 
+async function stageMultiFileSourcesWithExtension({
+  entryPath,
+  sourceFiles,
+  artifactDir,
+  requiredExtension,
+  resolveExtensionlessTargetBaseName,
+}: {
+  entryPath: string;
+  sourceFiles: string[];
+  artifactDir: string;
+  requiredExtension: ".java" | ".kt";
+  resolveExtensionlessTargetBaseName?: (
+    sourceFile: string,
+    sourceContent: string,
+  ) => string | null;
+}) {
+  const sourceRoot = dirname(entryPath);
+  const stagedSourceDir = join(
+    artifactDir,
+    requiredExtension === ".java" ? "java-src" : "kotlin-src",
+  );
+  await rm(stagedSourceDir, { recursive: true, force: true });
+  await mkdir(stagedSourceDir, { recursive: true });
+
+  const stagedSourceFiles: string[] = [];
+
+  for (const sourceFile of sourceFiles) {
+    const relativeSourcePath = relative(sourceRoot, sourceFile);
+    const sourceContent =
+      sourceFile.endsWith(requiredExtension) || !resolveExtensionlessTargetBaseName
+        ? null
+        : await readFile(sourceFile, "utf8");
+    const targetRelativePath = sourceFile.endsWith(requiredExtension)
+      ? relativeSourcePath
+      : join(
+          dirname(relativeSourcePath),
+          `${resolveExtensionlessTargetBaseName(sourceFile, sourceContent ?? "") ?? basename(relativeSourcePath)}${requiredExtension}`,
+        );
+    const stagedPath = join(stagedSourceDir, targetRelativePath);
+
+    await mkdir(dirname(stagedPath), { recursive: true });
+    await copyFile(sourceFile, stagedPath);
+    stagedSourceFiles.push(stagedPath);
+  }
+
+  return {
+    stagedSourceDir,
+    stagedSourceFiles,
+  };
+}
+
 function getBinaryName(entryPath: string) {
   const suffix = process.platform === "win32" ? ".exe" : "";
   return `${basename(entryPath, extname(entryPath))}${suffix}`;
@@ -726,10 +797,20 @@ async function prepareKotlinExecution({
 
   if (!useCache || !(await pathExists(artifactPath))) {
     await mkdir(artifactDir, { recursive: true });
+    const compileInput = sourceFiles.some((file) => !file.endsWith(".kt"))
+      ? await stageMultiFileSourcesWithExtension({
+          entryPath,
+          sourceFiles,
+          artifactDir,
+          requiredExtension: ".kt",
+        })
+      : null;
+    const compileSourceFiles = compileInput?.stagedSourceFiles ?? sourceFiles;
+    const compileCwd = compileInput?.stagedSourceDir ?? cwd;
 
     const compileArgs = [
       ...compileParts.slice(1),
-      ...sourceFiles,
+      ...compileSourceFiles,
       "-include-runtime",
       "-d",
       artifactPath,
@@ -737,7 +818,7 @@ async function prepareKotlinExecution({
     const compileResult = await runProcess({
       command: compileParts[0],
       args: compileArgs,
-      cwd,
+      cwd: compileCwd,
       timeoutMs,
     });
 
@@ -788,6 +869,7 @@ async function prepareJavaExecution({
     sourceContent.match(
       /^\s*package\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;/m,
     )?.[1] ?? "";
+  const declaredMainClass = getJavaDeclaredMainClassName(sourceContent);
   const sourceSignature = await getSourceSignature(entryPath, "java");
   const artifactDir = useCache
     ? join(
@@ -800,7 +882,7 @@ async function prepareJavaExecution({
       )
     : await mkdtemp(join(tmpdir(), "exvex-java-"));
   const sourceFiles = await getCompilationSourceFiles(entryPath, "java");
-  const mainClass = basename(entryPath, ".java");
+  const mainClass = declaredMainClass ?? basename(entryPath, ".java");
   const runtimeMainClass = packageName
     ? `${packageName}.${mainClass}`
     : mainClass;
@@ -809,11 +891,28 @@ async function prepareJavaExecution({
 
   if (!useCache || !(await pathExists(mainClassFile))) {
     await mkdir(artifactDir, { recursive: true });
+    const compileInput = sourceFiles.some((file) => !file.endsWith(".java"))
+      ? await stageMultiFileSourcesWithExtension({
+          entryPath,
+          sourceFiles,
+          artifactDir,
+          requiredExtension: ".java",
+          resolveExtensionlessTargetBaseName: (_sourceFile, sourceText) =>
+            getJavaDeclaredMainClassName(sourceText),
+        })
+      : null;
+    const compileSourceFiles = compileInput?.stagedSourceFiles ?? sourceFiles;
+    const compileCwd = compileInput?.stagedSourceDir ?? cwd;
 
     const compileResult = await runProcess({
       command: compileParts[0],
-      args: [...compileParts.slice(1), "-d", artifactDir, ...sourceFiles],
-      cwd,
+      args: [
+        ...compileParts.slice(1),
+        "-d",
+        artifactDir,
+        ...compileSourceFiles,
+      ],
+      cwd: compileCwd,
       timeoutMs,
     });
 
@@ -826,7 +925,7 @@ async function prepareJavaExecution({
             ...compileParts.slice(1),
             "-d",
             artifactDir,
-            ...sourceFiles,
+            ...compileSourceFiles,
           ],
           compileResult,
         ),
