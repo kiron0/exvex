@@ -593,6 +593,33 @@ async function prepareNativeExecution({
   if (!useCache || !(await pathExists(artifactPath))) {
     await mkdir(artifactDir, { recursive: true });
 
+    // Modern Go (1.16+) requires go.mod for module-aware builds. Competitive
+    // programming scripts are rarely set up as proper modules, so auto-create a
+    // minimal go.mod in cwd when none exists anywhere in the directory tree.
+    if (language === "go") {
+      let goModFound = false;
+      let dir = cwd;
+
+      for (;;) {
+        if (await pathExists(join(dir, "go.mod"))) {
+          goModFound = true;
+          break;
+        }
+
+        const parent = dirname(dir);
+
+        if (parent === dir) {
+          break;
+        }
+
+        dir = parent;
+      }
+
+      if (!goModFound) {
+        await writeFile(join(cwd, "go.mod"), "module solution\n\ngo 1.21\n");
+      }
+    }
+
     const compileArgs =
       language === "go"
         ? [...compileParts.slice(1), "-o", artifactPath, ...sourceFiles]
