@@ -1070,7 +1070,10 @@ async function resolveEntryFileWithLanguage(
   }
 
   if (candidateFiles.length === 1) {
-    return { path: detectedFiles[0]!.path, language: detectedFiles[0]!.language };
+    return {
+      path: detectedFiles[0]!.path,
+      language: detectedFiles[0]!.language,
+    };
   }
 
   if (candidateFiles.length === 0) {

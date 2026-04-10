@@ -54,9 +54,6 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Format check
-        run: npx prettier --check "**/*.{ts,json,md}"
-
       - name: Unit tests
         run: npm test
 

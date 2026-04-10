@@ -75,7 +75,8 @@ function getProcessesMatching(marker: string) {
         const pid = Number(
           firstSpaceIndex >= 0 ? line.slice(0, firstSpaceIndex) : line,
         );
-        const args = firstSpaceIndex >= 0 ? line.slice(firstSpaceIndex + 1) : "";
+        const args =
+          firstSpaceIndex >= 0 ? line.slice(firstSpaceIndex + 1) : "";
 
         return { pid, args };
       })

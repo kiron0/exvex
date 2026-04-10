@@ -1,6 +1,6 @@
 {
   "name": "exvex",
-  "description": "A fast CLI runner and judge for competitive programming workflows.",
+  "description": "Run, judge, and stress-test competitive programming solutions from one CLI.",
   "version": "0.1.0",
   "type": "module",
   "bin": {
@@ -27,8 +27,12 @@
   "keywords": [
     "cli",
     "competitive-programming",
+    "competitive-programming-tool",
+    "cp",
     "judge",
     "runner",
+    "sample-tests",
+    "multi-language",
     "stress-testing"
   ],
   "license": "MIT",

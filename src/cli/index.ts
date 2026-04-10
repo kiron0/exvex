@@ -879,8 +879,9 @@ export function isCliEntrypoint(
   };
 
   try {
-    const modulePath =
-      moduleUrl.startsWith("file:") ? fileURLToPath(moduleUrl) : moduleUrl;
+    const modulePath = moduleUrl.startsWith("file:")
+      ? fileURLToPath(moduleUrl)
+      : moduleUrl;
 
     return normalizePathToHref(entryPath) === normalizePathToHref(modulePath);
   } catch {

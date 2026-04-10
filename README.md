@@ -3,13 +3,16 @@
 [![npm version](https://img.shields.io/npm/v/exvex.svg?style=flat-square)](https://www.npmjs.com/package/exvex)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
 
-**exvex is a fast CLI runner and local judge for competitive programming workflows.**
+**exvex is a CLI for running, judging, and stress-testing competitive programming solutions locally.**
 
-It detects supported languages, compiles when needed, runs sample tests, and supports brute-force stress testing from the terminal.
+It gives you one local workflow for the repetitive parts of problem solving: run a solution from source, check it against sample cases, and compare it against a brute-force implementation when you need stress testing.
+
+exvex is built for competitive programmers who switch between languages and want faster feedback than a pile of ad hoc shell commands, compiler invocations, and one-off scripts.
 
 ## Features
 
 - Run supported source files with one command
+- Use one CLI for run, sample judging, and stress testing
 - Detect languages from file extensions, shebangs, and common source patterns
 - Cache compiled C, C++, Java, Go, Rust, and Kotlin artifacts
 - Judge `input/*.txt` against `output/*.txt`
@@ -114,13 +117,13 @@ Create `exvex.config.json` in the working directory to override defaults:
 
 ```text
 problem/
-├── main.cpp
-├── input/
-│   ├── 1.txt
-│   └── 2.txt
-└── output/
-    ├── 1.txt
-    └── 2.txt
+|-- main.cpp
+|-- input/
+|   |-- 1.txt
+|   `-- 2.txt
+`-- output/
+    |-- 1.txt
+    `-- 2.txt
 ```
 
 ## License

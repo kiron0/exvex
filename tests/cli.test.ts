@@ -657,9 +657,7 @@ describe("isCliEntrypoint", () => {
     const modulePath = join(tmpdir(), "exvex-cli.mjs");
     const moduleUrl = pathToFileURL(modulePath).href;
 
-    expect(isCliEntrypoint(["node", modulePath], moduleUrl)).toBe(
-      true,
-    );
+    expect(isCliEntrypoint(["node", modulePath], moduleUrl)).toBe(true);
   });
 
   it("returns true when the executable path is a symlink", () => {
@@ -670,7 +668,11 @@ describe("isCliEntrypoint", () => {
     try {
       writeFileSync(realPath, "");
       try {
-        symlinkSync(realPath, symlinkPath, process.platform === "win32" ? "file" : undefined);
+        symlinkSync(
+          realPath,
+          symlinkPath,
+          process.platform === "win32" ? "file" : undefined,
+        );
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "EPERM") {
           return;
@@ -679,9 +681,9 @@ describe("isCliEntrypoint", () => {
         throw error;
       }
 
-      expect(isCliEntrypoint(["node", symlinkPath], pathToFileURL(realPath).href)).toBe(
-        true,
-      );
+      expect(
+        isCliEntrypoint(["node", symlinkPath], pathToFileURL(realPath).href),
+      ).toBe(true);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
