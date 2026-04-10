@@ -36,7 +36,11 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
       - name: Resolve release metadata
         id: meta
@@ -98,23 +102,23 @@ jobs:
 
       - name: Install dependencies
         if: steps.version_guard.outputs.changed == 'true' && steps.check_release.outputs.exists == 'false'
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Type check
         if: steps.version_guard.outputs.changed == 'true' && steps.check_release.outputs.exists == 'false'
-        run: npx tsc --noEmit
+        run: bunx tsc --noEmit
 
       - name: Format check
         if: steps.version_guard.outputs.changed == 'true' && steps.check_release.outputs.exists == 'false'
-        run: npx prettier --check "**/*.{ts,json,md}"
+        run: bunx prettier --check "**/*.{ts,json,md}"
 
       - name: Unit tests
         if: steps.version_guard.outputs.changed == 'true' && steps.check_release.outputs.exists == 'false'
-        run: npm test
+        run: bun run test
 
       - name: Build
         if: steps.version_guard.outputs.changed == 'true' && steps.check_release.outputs.exists == 'false'
-        run: npm run build
+        run: bun run build
 
       - name: Smoke test
         if: steps.version_guard.outputs.changed == 'true' && steps.check_release.outputs.exists == 'false'

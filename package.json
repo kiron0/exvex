@@ -10,7 +10,7 @@
     "build": "tsup",
     "test": "vitest run tests/cli.test.ts tests/lib.test.ts",
     "test:build": "bun scripts/test-build.ts",
-    "test:pack": "npm pack --dry-run --json --cache .npm-cache > .exvex-pack.json && bun scripts/test-pack.ts",
+    "test:pack": "bun pm pack --dry-run > .exvex-pack.txt && bun scripts/test-pack.ts",
     "test:smoke": "node dist/index.js --help",
     "test:e2e:live": "vitest run tests/live-e2e.test.ts",
     "build:watch": "tsup --watch",

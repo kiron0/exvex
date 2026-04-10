@@ -3,57 +3,26 @@ import { access, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-interface PackFileEntry {
-  path?: string;
-}
-
-interface PackEntry {
-  filename?: string;
-  files?: PackFileEntry[];
-}
-
 interface PackageManifest {
   bin?: string | Record<string, string>;
 }
 
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
-const packMetadataPath = join(rootDir, ".exvex-pack.json");
-const npmCacheDir = join(rootDir, ".npm-cache");
+const packMetadataPath = join(rootDir, ".exvex-pack.txt");
 const distEntryPath = join(rootDir, "dist/index.js");
 
 try {
   await assert.doesNotReject(
     access(distEntryPath),
-    "Built artifact missing at dist/index.js. Run `npm run build` first.",
+    "Built artifact missing at dist/index.js. Run `bun run build` first.",
   );
 
-  const packMetadata = JSON.parse(
-    await readFile(packMetadataPath, "utf8"),
-  ) as unknown;
+  const packMetadata = await readFile(packMetadataPath, "utf8");
 
-  assert.ok(
-    Array.isArray(packMetadata),
-    "npm pack --json output must be an array.",
-  );
-  assert.equal(
-    packMetadata.length,
-    1,
-    "Expected exactly one package entry from npm pack.",
-  );
-
-  const [packageEntry] = packMetadata as PackEntry[];
   assert.match(
-    packageEntry.filename ?? "",
-    /^exvex-.*\.tgz$/,
-    "npm pack did not produce the expected tarball filename.",
-  );
-
-  const publishedFiles = new Set(
-    Array.isArray(packageEntry.files)
-      ? packageEntry.files.flatMap((file) =>
-          typeof file.path === "string" ? [file.path] : [],
-        )
-      : [],
+    packMetadata,
+    /^exvex-.*\.tgz$/m,
+    "bun pm pack did not report the expected tarball filename.",
   );
 
   for (const requiredPath of [
@@ -62,9 +31,10 @@ try {
     "LICENSE",
     "package.json",
   ]) {
-    assert.ok(
-      publishedFiles.has(requiredPath),
-      `Published tarball is missing required file: ${requiredPath}`,
+    assert.match(
+      packMetadata,
+      new RegExp(`packed\\s+.+\\s+${requiredPath.replace(/\./g, "\\.")}`),
+      `Packed tarball listing is missing required file: ${requiredPath}`,
     );
   }
 
@@ -82,5 +52,4 @@ try {
   process.stdout.write("Packed tarball checks passed.\n");
 } finally {
   await rm(packMetadataPath, { force: true });
-  await rm(npmCacheDir, { recursive: true, force: true });
 }

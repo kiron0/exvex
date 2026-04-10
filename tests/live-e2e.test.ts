@@ -7,7 +7,7 @@ import { promisify } from "util";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const execFile = promisify(execFileCallback);
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const bunCommand = process.platform === "win32" ? "bun.exe" : "bun";
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
 const liveE2EEnabled = process.env.EXVEX_RUN_LIVE_E2E === "1";
 const liveDescribe = liveE2EEnabled ? describe : describe.skip;
@@ -29,7 +29,7 @@ async function commandExists(command: string) {
 
 liveDescribe("live CLI e2e", () => {
   beforeAll(async () => {
-    await execFile(npmCommand, ["run", "build"], {
+    await execFile(bunCommand, ["run", "build"], {
       cwd: rootDir,
     });
   }, 180000);

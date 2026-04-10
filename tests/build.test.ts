@@ -4,12 +4,24 @@ import { promisify } from "util";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const execFile = promisify(execFileCallback);
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const bunCommand = process.platform === "win32" ? "bun.exe" : "bun";
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
+const bunDescribe = (await canRunBun()) ? describe : describe.skip;
 
-describe("built CLI", () => {
+async function canRunBun() {
+  try {
+    await execFile(bunCommand, ["--version"], {
+      cwd: rootDir,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+bunDescribe("built CLI", () => {
   beforeAll(async () => {
-    await execFile(npmCommand, ["run", "build"], {
+    await execFile(bunCommand, ["run", "build"], {
       cwd: rootDir,
     });
   });

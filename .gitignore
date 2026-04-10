@@ -1,8 +1,11 @@
 /dist
 /node_modules
-.npm-cache
+.exvex-pack.txt
+.exvex-pack-test.txt
 
 .exvex
+
+.bun*
 
 .env
 .DS_Store

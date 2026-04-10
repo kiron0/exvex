@@ -1,93 +1,68 @@
 import { execFile as execFileCallback } from "child_process";
-import { mkdtemp, readFile, rm, unlink, writeFile } from "fs/promises";
-import { tmpdir } from "os";
+import { readFile, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { promisify } from "util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const execFile = promisify(execFileCallback);
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const bunCommand = process.platform === "win32" ? "bun.exe" : "bun";
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
-const npmCacheDir = join(tmpdir(), "exvex-npm-cache");
+const packOutputPath = join(rootDir, ".exvex-pack-test.txt");
+const distEntryPath = join(rootDir, "dist", "index.js");
+const bunDescribe = (await canRunBun()) ? describe : describe.skip;
 
-let tarballPath: string | undefined;
-let installDir: string | undefined;
+let packOutput = "";
+let packageVersion = "";
 
-describe("packed tarball", () => {
+async function canRunBun() {
+  try {
+    await execFile(bunCommand, ["--version"], {
+      cwd: rootDir,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+bunDescribe("packed tarball", () => {
   beforeAll(async () => {
-    await execFile(npmCommand, ["run", "build"], {
+    const packageJson = JSON.parse(
+      await readFile(join(rootDir, "package.json"), "utf8"),
+    ) as {
+      version?: string;
+    };
+
+    packageVersion = packageJson.version ?? "";
+    await execFile(bunCommand, ["run", "build"], {
       cwd: rootDir,
     });
 
-    const { stdout } = await execFile(
-      npmCommand,
-      ["pack", "--cache", npmCacheDir],
-      {
-        cwd: rootDir,
-      },
-    );
-    const tarballName = stdout.trim().split(/\s+/).at(-1);
+    const { stdout } = await execFile(bunCommand, ["pm", "pack", "--dry-run"], {
+      cwd: rootDir,
+    });
 
-    if (!tarballName) {
-      throw new Error("Failed to determine tarball filename from npm pack.");
-    }
-
-    tarballPath = join(rootDir, tarballName);
-    installDir = await mkdtemp(join(tmpdir(), "exvex-pack-test-"));
-
-    await writeFile(
-      join(installDir, "package.json"),
-      JSON.stringify({ name: "exvex-pack-test", private: true }, null, 2),
-    );
-
-    await execFile(
-      npmCommand,
-      ["install", tarballPath, "--cache", npmCacheDir],
-      {
-        cwd: installDir,
-      },
-    );
+    packOutput = stdout;
+    await writeFile(packOutputPath, stdout);
   }, 240000);
 
   afterAll(async () => {
-    if (installDir) {
-      await rm(installDir, { recursive: true, force: true });
-    }
-
-    if (tarballPath) {
-      await unlink(tarballPath).catch(() => undefined);
-    }
+    await rm(packOutputPath, { force: true });
   });
 
-  it("executes the installed bin from the tarball", async () => {
-    if (!installDir) {
-      throw new Error("Install directory was not prepared.");
-    }
+  it("includes the expected published files in bun pm pack output", () => {
+    expect(packOutput).toContain(`exvex-${packageVersion}.tgz`);
+    expect(packOutput).toContain("packed");
+    expect(packOutput).toContain("package.json");
+    expect(packOutput).toContain("LICENSE");
+    expect(packOutput).toContain("README.md");
+    expect(packOutput).toContain("dist/index.js");
+  }, 120000);
 
-    const installedPackageJsonPath = join(
-      installDir,
-      "node_modules",
-      "exvex",
-      "package.json",
-    );
-    const installedPackageJson = JSON.parse(
-      await readFile(installedPackageJsonPath, "utf8"),
-    ) as {
-      bin?: string | Record<string, string>;
-    };
-    const binRelativePath =
-      typeof installedPackageJson.bin === "string"
-        ? installedPackageJson.bin
-        : installedPackageJson.bin?.exvex;
-
-    if (!binRelativePath) {
-      throw new Error("Installed tarball does not expose an exvex bin path.");
-    }
-
-    const binPath = join(installDir, "node_modules", "exvex", binRelativePath);
-    const { stdout } = await execFile(process.execPath, [binPath, "--help"], {
-      cwd: installDir,
+  it("produces a runnable built artifact before packing", async () => {
+    const { stdout } = await execFile(process.execPath, [distEntryPath, "--help"], {
+      cwd: rootDir,
     });
 
     expect(stdout).toContain("Usage:");

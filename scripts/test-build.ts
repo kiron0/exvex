@@ -30,7 +30,7 @@ const distEntryPath = join(rootDir, "dist/index.js");
 
 await assert.doesNotReject(
   access(distEntryPath),
-  "Built artifact missing at dist/index.js. Run `npm run build` first.",
+  "Built artifact missing at dist/index.js. Run `bun run build` first.",
 );
 
 const { getHelpText, runCli } = (await import(
