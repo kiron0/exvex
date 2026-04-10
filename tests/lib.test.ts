@@ -34,7 +34,8 @@ const hasRuby = commandExists("ruby");
 
 function commandExists(command: string) {
   try {
-    execFileSync("/bin/zsh", ["-lc", `command -v ${command}`], {
+    // Use /bin/sh (always available) rather than /bin/zsh (absent on Ubuntu CI).
+    execFileSync("/bin/sh", ["-c", `command -v ${command}`], {
       stdio: "ignore",
     });
     return true;

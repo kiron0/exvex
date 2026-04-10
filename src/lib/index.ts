@@ -593,12 +593,17 @@ async function prepareNativeExecution({
   if (!useCache || !(await pathExists(artifactPath))) {
     await mkdir(artifactDir, { recursive: true });
 
-    // Modern Go (1.16+) requires go.mod for module-aware builds. Competitive
-    // programming scripts are rarely set up as proper modules, so auto-create a
-    // minimal go.mod in cwd when none exists anywhere in the directory tree.
+    // Go-specific setup: we build with `go build .` (package dot notation)
+    // rather than passing individual file paths. Passing absolute paths to
+    // `go build` causes Go to treat them as import paths relative to the
+    // module root, leading to "does not contain package" errors.
+    // We also auto-create a minimal go.mod if none exists, because modern Go
+    // (1.16+) requires module-aware mode even for single-file CP scripts.
+    const sourceDir = dirname(entryPath);
+
     if (language === "go") {
       let goModFound = false;
-      let dir = cwd;
+      let dir = sourceDir;
 
       for (;;) {
         if (await pathExists(join(dir, "go.mod"))) {
@@ -616,18 +621,25 @@ async function prepareNativeExecution({
       }
 
       if (!goModFound) {
-        await writeFile(join(cwd, "go.mod"), "module solution\n\ngo 1.21\n");
+        await writeFile(
+          join(sourceDir, "go.mod"),
+          "module solution\n\ngo 1.21\n",
+        );
       }
     }
 
+    // For Go: build the package in the source directory ("go build . ").
+    // For other languages: pass the entry file path directly.
+    const [compileTarget, compileCwd] =
+      language === "go" ? [".", sourceDir] : [entryPath, cwd];
     const compileArgs =
       language === "go"
-        ? [...compileParts.slice(1), "-o", artifactPath, ...sourceFiles]
-        : [...compileParts.slice(1), entryPath, "-o", artifactPath];
+        ? [...compileParts.slice(1), "-o", artifactPath, compileTarget]
+        : [...compileParts.slice(1), compileTarget, "-o", artifactPath];
     const compileResult = await runProcess({
       command: compileParts[0],
       args: compileArgs,
-      cwd,
+      cwd: compileCwd,
       timeoutMs,
     });
 
