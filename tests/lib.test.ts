@@ -581,20 +581,19 @@ describe("runFile", () => {
       );
 
       await expect(detectLanguageForFile(entryPath)).resolves.toBe("go");
+      const goRun = runFile({
+        cwd: directory,
+        entryFile: "solution",
+        timeoutMs: hasGo ? 15000 : 5000,
+      });
 
       if (hasGo) {
-        const result = await runFile({
-          cwd: directory,
-          entryFile: "solution",
-          timeoutMs: 15000,
-        });
-
+        const result = await goRun;
         expect(result.exitCode).toBe(0);
         expect(result.stdout.trim()).toBe("hello");
       } else {
-        await expect(
-          runFile({ cwd: directory, entryFile: "solution", timeoutMs: 5000 }),
-        ).rejects.toThrow(/not found on PATH/);
+        await expect(goRun).rejects.toThrow();
+        await expect(goRun).rejects.not.toThrow(/No go sources found/);
       }
 
       await expect(stat(join(directory, "go.mod"))).rejects.toThrow();

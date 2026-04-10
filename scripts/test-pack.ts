@@ -3,16 +3,31 @@ import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+interface PackFileEntry {
+  path?: string;
+}
+
+interface PackEntry {
+  filename?: string;
+  files?: PackFileEntry[];
+}
+
+interface PackageManifest {
+  bin?: string | Record<string, string>;
+}
+
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
 const packMetadataPath = join(rootDir, ".exvex-pack.json");
 
 try {
-  const packMetadata = JSON.parse(await readFile(packMetadataPath, "utf8"));
+  const packMetadata = JSON.parse(
+    await readFile(packMetadataPath, "utf8"),
+  ) as unknown;
 
   assert.ok(Array.isArray(packMetadata), "npm pack --json output must be an array.");
   assert.equal(packMetadata.length, 1, "Expected exactly one package entry from npm pack.");
 
-  const [packageEntry] = packMetadata;
+  const [packageEntry] = packMetadata as PackEntry[];
   assert.match(
     packageEntry.filename ?? "",
     /^exvex-.*\.tgz$/,
@@ -21,20 +36,31 @@ try {
 
   const publishedFiles = new Set(
     Array.isArray(packageEntry.files)
-      ? packageEntry.files.map((file) => file.path)
+      ? packageEntry.files.flatMap((file) =>
+          typeof file.path === "string" ? [file.path] : [],
+        )
       : [],
   );
 
-  for (const requiredPath of ["dist/index.js", "README.md", "LICENSE", "package.json"]) {
+  for (const requiredPath of [
+    "dist/index.js",
+    "README.md",
+    "LICENSE",
+    "package.json",
+  ]) {
     assert.ok(
       publishedFiles.has(requiredPath),
       `Published tarball is missing required file: ${requiredPath}`,
     );
   }
 
-  const packageJson = JSON.parse(await readFile(join(rootDir, "package.json"), "utf8"));
+  const packageJson = JSON.parse(
+    await readFile(join(rootDir, "package.json"), "utf8"),
+  ) as PackageManifest;
   assert.equal(
-    packageJson.bin?.exvex,
+    packageJson.bin && typeof packageJson.bin !== "string"
+      ? packageJson.bin.exvex
+      : packageJson.bin,
     "dist/index.js",
     "Published manifest should expose the exvex bin at dist/index.js.",
   );

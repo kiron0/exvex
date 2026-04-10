@@ -1,9 +1,26 @@
 import assert from "node:assert/strict";
 import { access } from "node:fs/promises";
-import { PassThrough } from "node:stream";
-import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { PassThrough } from "node:stream";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+interface BuiltCliModule {
+  getHelpText: () => string;
+  runCli: (args: string[], dependencies: {
+    cwd: () => string;
+    stdin: PassThrough;
+    stdout: PassThrough;
+    stderr: PassThrough;
+    isTty: boolean;
+    logger: {
+      log: (message: unknown) => void;
+      error: (message: unknown) => void;
+    };
+    runFile: () => Promise<never>;
+    runJudge: () => Promise<never>;
+    runStress: () => Promise<never>;
+  }) => Promise<number>;
+}
 
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
 const distEntryPath = join(rootDir, "dist/index.js");
@@ -12,9 +29,10 @@ await assert.doesNotReject(
   access(distEntryPath),
   "Built artifact missing at dist/index.js. Run `npm run build` first.",
 );
-const { getHelpText, runCli } = await import(
+
+const { getHelpText, runCli } = (await import(
   `${pathToFileURL(distEntryPath).href}?t=${Date.now()}`
-);
+)) as BuiltCliModule;
 
 const helpText = getHelpText();
 
@@ -27,8 +45,8 @@ assert.match(
 assert.match(helpText, /\.go/, "Built CLI help output is missing .go support.");
 assert.match(helpText, /\.rb/, "Built CLI help output is missing .rb support.");
 
-const loggerMessages = [];
-const loggerErrors = [];
+const loggerMessages: string[] = [];
+const loggerErrors: string[] = [];
 const exitCode = await runCli(["--unknown"], {
   cwd: () => rootDir,
   stdin: new PassThrough(),
@@ -36,8 +54,8 @@ const exitCode = await runCli(["--unknown"], {
   stderr: new PassThrough(),
   isTty: false,
   logger: {
-    log: (message) => loggerMessages.push(String(message)),
-    error: (message) => loggerErrors.push(String(message)),
+    log: (message: unknown) => loggerMessages.push(String(message)),
+    error: (message: unknown) => loggerErrors.push(String(message)),
   },
   runFile: async () => {
     throw new Error("runFile should not be called for argument validation.");
@@ -50,8 +68,16 @@ const exitCode = await runCli(["--unknown"], {
   },
 });
 
-assert.equal(exitCode, 1, "Built CLI should return a failing exit code for invalid options.");
-assert.equal(loggerMessages.length, 0, "Built CLI should not log normal output for invalid options.");
+assert.equal(
+  exitCode,
+  1,
+  "Built CLI should return a failing exit code for invalid options.",
+);
+assert.equal(
+  loggerMessages.length,
+  0,
+  "Built CLI should not log normal output for invalid options.",
+);
 assert.match(
   loggerErrors.join("\n"),
   /Unknown option: --unknown/,
