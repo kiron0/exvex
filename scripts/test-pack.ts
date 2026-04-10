@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, rm } from "node:fs/promises";
+import { access, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,14 +18,28 @@ interface PackageManifest {
 
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
 const packMetadataPath = join(rootDir, ".exvex-pack.json");
+const npmCacheDir = join(rootDir, ".npm-cache");
+const distEntryPath = join(rootDir, "dist/index.js");
 
 try {
+  await assert.doesNotReject(
+    access(distEntryPath),
+    "Built artifact missing at dist/index.js. Run `npm run build` first.",
+  );
+
   const packMetadata = JSON.parse(
     await readFile(packMetadataPath, "utf8"),
   ) as unknown;
 
-  assert.ok(Array.isArray(packMetadata), "npm pack --json output must be an array.");
-  assert.equal(packMetadata.length, 1, "Expected exactly one package entry from npm pack.");
+  assert.ok(
+    Array.isArray(packMetadata),
+    "npm pack --json output must be an array.",
+  );
+  assert.equal(
+    packMetadata.length,
+    1,
+    "Expected exactly one package entry from npm pack.",
+  );
 
   const [packageEntry] = packMetadata as PackEntry[];
   assert.match(
@@ -68,4 +82,5 @@ try {
   process.stdout.write("Packed tarball checks passed.\n");
 } finally {
   await rm(packMetadataPath, { force: true });
+  await rm(npmCacheDir, { recursive: true, force: true });
 }

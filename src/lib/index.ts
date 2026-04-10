@@ -219,8 +219,10 @@ function detectLanguageFromContent(content: string): SupportedLanguage | null {
   }
 
   if (
-    /^\s*import\s+\w+/m.test(content) &&
-    /__name__\s*==\s*["']__main__["']/.test(content)
+    /__name__\s*==\s*["']__main__["']/.test(content) ||
+    /^\s*from\s+[A-Za-z_][\w.]*\s+import\s+/m.test(content) ||
+    /^\s*def\s+\w+\s*\([^)]*\)\s*:/m.test(content) ||
+    /^\s*class\s+\w+(?:\([^)]*\))?\s*:/m.test(content)
   ) {
     return "python";
   }

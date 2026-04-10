@@ -6,20 +6,23 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 interface BuiltCliModule {
   getHelpText: () => string;
-  runCli: (args: string[], dependencies: {
-    cwd: () => string;
-    stdin: PassThrough;
-    stdout: PassThrough;
-    stderr: PassThrough;
-    isTty: boolean;
-    logger: {
-      log: (message: unknown) => void;
-      error: (message: unknown) => void;
-    };
-    runFile: () => Promise<never>;
-    runJudge: () => Promise<never>;
-    runStress: () => Promise<never>;
-  }) => Promise<number>;
+  runCli: (
+    args: string[],
+    dependencies: {
+      cwd: () => string;
+      stdin: PassThrough;
+      stdout: PassThrough;
+      stderr: PassThrough;
+      isTty: boolean;
+      logger: {
+        log: (message: unknown) => void;
+        error: (message: unknown) => void;
+      };
+      runFile: () => Promise<never>;
+      runJudge: () => Promise<never>;
+      runStress: () => Promise<never>;
+    },
+  ) => Promise<number>;
 }
 
 const rootDir = fileURLToPath(new URL("../", import.meta.url));

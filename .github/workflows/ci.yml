@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "src/**"
+      - "scripts/**"
       - "tests/**"
       - "package.json"
       - "package-lock.json"
@@ -15,6 +16,7 @@ on:
     branches: [main]
     paths:
       - "src/**"
+      - "scripts/**"
       - "tests/**"
       - "package.json"
       - "package-lock.json"
@@ -59,6 +61,12 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Built artifact checks
+        run: npm run test:build
+
+      - name: Packed tarball checks
+        run: npm run test:pack
 
       - name: Smoke test
         run: node dist/index.js --help

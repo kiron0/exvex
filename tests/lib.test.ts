@@ -330,6 +330,25 @@ describe("resolveEntryFile", () => {
 
     await expect(detectLanguageForFile(entryPath)).resolves.toBe("ruby");
   });
+
+  it("detects extensionless Python files without imports when they use __main__", async () => {
+    const directory = await createTempDir("exvex-entry-py-main-");
+    const entryPath = join(directory, "main");
+
+    await writeFile(
+      entryPath,
+      [
+        "def main():",
+        "    print('hello')",
+        "",
+        'if __name__ == "__main__":',
+        "    main()",
+      ].join("\n"),
+    );
+
+    await expect(detectLanguageForFile(entryPath)).resolves.toBe("python");
+    await expect(resolveEntryFile(directory, "main")).resolves.toBe(entryPath);
+  });
 });
 
 describe("output helpers", () => {
