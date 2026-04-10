@@ -609,11 +609,14 @@ async function prepareNativeExecution({
       for (const sourceFile of sourceFiles) {
         const stagedName = sourceFile.endsWith(".go")
           ? basename(sourceFile)
-          : `__exvex_${syntheticIndex += 1}.go`;
+          : `__exvex_${(syntheticIndex += 1)}.go`;
         await copyFile(sourceFile, join(stagedSourceDir, stagedName));
       }
 
-      await writeFile(join(stagedSourceDir, "go.mod"), "module solution\n\ngo 1.21\n");
+      await writeFile(
+        join(stagedSourceDir, "go.mod"),
+        "module solution\n\ngo 1.21\n",
+      );
       compileTarget = ".";
       compileCwd = stagedSourceDir;
     }
