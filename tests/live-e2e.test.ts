@@ -15,7 +15,12 @@ const cliPath = join(rootDir, "dist/index.js");
 
 async function commandExists(command: string) {
   try {
-    await execFile("/bin/zsh", ["-lc", `command -v ${command}`]);
+    if (process.platform === "win32") {
+      await execFile(command, ["--version"]);
+    } else {
+      await execFile("/bin/sh", ["-lc", `command -v ${command}`]);
+      await execFile(command, ["--version"]);
+    }
     return true;
   } catch {
     return false;

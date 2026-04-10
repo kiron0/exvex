@@ -1,5 +1,8 @@
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import { PassThrough } from "stream";
+import { pathToFileURL } from "url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getHelpText,
@@ -651,23 +654,32 @@ describe("isCliEntrypoint", () => {
   });
 
   it("returns true for the current module path", () => {
-    const moduleUrl = "file:///tmp/exvex-cli.mjs";
+    const modulePath = join(tmpdir(), "exvex-cli.mjs");
+    const moduleUrl = pathToFileURL(modulePath).href;
 
-    expect(isCliEntrypoint(["node", "/tmp/exvex-cli.mjs"], moduleUrl)).toBe(
+    expect(isCliEntrypoint(["node", modulePath], moduleUrl)).toBe(
       true,
     );
   });
 
   it("returns true when the executable path is a symlink", () => {
-    const tempDir = mkdtempSync("/tmp/exvex-cli-test-");
-    const realPath = `${tempDir}/real-cli.mjs`;
-    const symlinkPath = `${tempDir}/linked-cli.mjs`;
+    const tempDir = mkdtempSync(join(tmpdir(), "exvex-cli-test-"));
+    const realPath = join(tempDir, "real-cli.mjs");
+    const symlinkPath = join(tempDir, "linked-cli.mjs");
 
     try {
       writeFileSync(realPath, "");
-      symlinkSync(realPath, symlinkPath);
+      try {
+        symlinkSync(realPath, symlinkPath, process.platform === "win32" ? "file" : undefined);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EPERM") {
+          return;
+        }
 
-      expect(isCliEntrypoint(["node", symlinkPath], `file://${realPath}`)).toBe(
+        throw error;
+      }
+
+      expect(isCliEntrypoint(["node", symlinkPath], pathToFileURL(realPath).href)).toBe(
         true,
       );
     } finally {

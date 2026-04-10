@@ -27,18 +27,22 @@ import { splitCommand } from "../src/utils";
 
 const tempDirs: string[] = [];
 const hasGo = commandExists("go");
-const hasRustc = commandExists("rustc");
+const hasRustc = commandExists("rustc", ["--version"]);
 const hasJava = commandExists("javac") && commandExists("java");
 const hasKotlinc = commandExists("kotlinc") && commandExists("java");
 const hasRuby = commandExists("ruby");
 const SLOW_TOOLCHAIN_TEST_TIMEOUT_MS = 30000;
 
-function commandExists(command: string) {
+function commandExists(command: string, args: string[] = ["--version"]) {
   try {
-    // Use /bin/sh (always available) rather than /bin/zsh (absent on Ubuntu CI).
-    execFileSync("/bin/sh", ["-c", `command -v ${command}`], {
-      stdio: "ignore",
-    });
+    if (process.platform === "win32") {
+      execFileSync(command, args, { stdio: "ignore" });
+    } else {
+      execFileSync("/bin/sh", ["-c", `command -v ${command}`], {
+        stdio: "ignore",
+      });
+      execFileSync(command, args, { stdio: "ignore" });
+    }
     return true;
   } catch {
     return false;
@@ -46,6 +50,39 @@ function commandExists(command: string) {
 }
 
 function getProcessesMatching(marker: string) {
+  if (process.platform === "win32") {
+    const escapedMarker = marker.replace(/'/g, "''");
+    const powershellScript = [
+      `$marker = '${escapedMarker}'`,
+      "$processes = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like ('*' + $marker + '*') }",
+      "$processes | ForEach-Object {",
+      "  $commandLine = if ($null -ne $_.CommandLine) { $_.CommandLine } else { '' }",
+      "  [Console]::WriteLine(('{0} {1}' -f $_.ProcessId, $commandLine))",
+      "}",
+    ].join("; ");
+    const output = execFileSync(
+      "powershell.exe",
+      ["-NoProfile", "-Command", powershellScript],
+      { encoding: "utf8" },
+    );
+
+    return output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const firstSpaceIndex = line.indexOf(" ");
+        const pid = Number(
+          firstSpaceIndex >= 0 ? line.slice(0, firstSpaceIndex) : line,
+        );
+        const args = firstSpaceIndex >= 0 ? line.slice(firstSpaceIndex + 1) : "";
+
+        return { pid, args };
+      })
+      .filter((entry) => !entry.args.includes("Get-CimInstance Win32_Process"))
+      .filter((entry) => Number.isInteger(entry.pid));
+  }
+
   const output = execFileSync("ps", ["-eo", "pid=,args="], {
     encoding: "utf8",
   });
@@ -56,8 +93,10 @@ function getProcessesMatching(marker: string) {
     .filter((line) => line.includes(marker))
     .map((line) => {
       const firstSpaceIndex = line.indexOf(" ");
-      const pid = Number(line.slice(0, firstSpaceIndex));
-      const args = line.slice(firstSpaceIndex + 1);
+      const pid = Number(
+        firstSpaceIndex >= 0 ? line.slice(0, firstSpaceIndex) : line,
+      );
+      const args = firstSpaceIndex >= 0 ? line.slice(firstSpaceIndex + 1) : "";
 
       return { pid, args };
     })

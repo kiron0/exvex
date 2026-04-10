@@ -43,9 +43,8 @@ jobs:
         shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          NAME=$(node -p "require('./package.json').name")
           TAG="v$VERSION"
-          TITLE="$NAME $TAG"
+          TITLE="$TAG"
 
           {
             echo "version=$VERSION"
@@ -140,7 +139,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "${{ steps.meta.outputs.tag }}" "${{ github.sha }}"
+          git tag "${{ steps.meta.outputs.tag }}" "${{ github.event.workflow_run.head_sha || github.sha }}"
           git push origin "refs/tags/${{ steps.meta.outputs.tag }}"
 
       - name: Create GitHub release
@@ -151,7 +150,7 @@ jobs:
         run: |
           gh release create "${{ steps.meta.outputs.tag }}" \
             --repo "${{ github.repository }}" \
-            --target "${{ github.sha }}" \
+            --target "${{ github.event.workflow_run.head_sha || github.sha }}" \
             --verify-tag \
             --title "${{ steps.meta.outputs.title }}" \
-            --generate-notes
+            --notes ""

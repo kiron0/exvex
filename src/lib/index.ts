@@ -70,6 +70,42 @@ interface DetectedSourceFile {
   language: SupportedLanguage;
 }
 
+function terminateProcessTree(pid: number) {
+  if (process.platform === "win32") {
+    try {
+      const killer = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: "ignore",
+      });
+      killer.once("error", () => {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          // Ignore failures when the process is already gone.
+        }
+      });
+    } catch {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // Ignore failures when the process is already gone.
+      }
+    }
+
+    return;
+  }
+
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Ignore failures when the process is already gone.
+    }
+  }
+}
+
 function resolveFrom(baseDir: string, filePath: string) {
   return isAbsolute(filePath) ? filePath : resolve(baseDir, filePath);
 }
@@ -299,22 +335,21 @@ async function runProcess({
     let settled = false;
 
     const terminateChild = () => {
-      if (child.exitCode !== null || child.killed) {
+      if (child.exitCode !== null) {
         return;
       }
 
-      if (useProcessGroup && child.pid) {
-        try {
-          process.kill(-child.pid, "SIGKILL");
-          return;
-        } catch {
-          // Fall back to killing the direct child if the process group is gone.
-        }
+      if (child.pid) {
+        terminateProcessTree(child.pid);
+        return;
       }
 
-      child.kill("SIGKILL");
+      if (!child.killed) {
+        child.kill("SIGKILL");
+      }
     };
 
+    // timeoutMs === 0 means no timeout (infinite wait).
     const timeoutHandle =
       timeoutMs > 0
         ? setTimeout(() => {
@@ -342,6 +377,7 @@ async function runProcess({
     };
 
     child.once("error", (error) => {
+      terminateChild();
       finish(() => {
         const errorWithCode = error as NodeJS.ErrnoException;
 
@@ -391,7 +427,9 @@ async function runProcess({
     }
 
     if (inputStream) {
-      inputStream.pipe(child.stdin!);
+      if (child.stdin) {
+        inputStream.pipe(child.stdin);
+      }
       return;
     }
 
@@ -423,14 +461,14 @@ async function getSignatureSourceFiles(
     const entries = await readdir(directory, { withFileTypes: true });
     const files = await Promise.all(
       entries.map(async (entry) => {
-        const entryPath = join(directory, entry.name);
+        const currentPath = join(directory, entry.name);
 
         if (entry.isDirectory()) {
-          return await listFilesRecursively(entryPath);
+          return await listFilesRecursively(currentPath);
         }
 
         if (entry.isFile()) {
-          return [entryPath];
+          return [currentPath];
         }
 
         return [];
@@ -453,7 +491,7 @@ async function getSignatureSourceFiles(
       })
       .sort();
 
-    return sourceFiles.length > 0 ? sourceFiles : [entryPath];
+    return sourceFiles;
   }
 
   if (language === "rust") {
@@ -528,13 +566,7 @@ async function getCompilationSourceFiles(
   // a file as Go/Java/Kotlin even when it lacks the standard extension, and the
   // extension-based scan above would silently omit it, causing either a
   // misleading "No sources found" error or compilation of the wrong file set.
-  const sourceFiles = [...new Set([...scannedFiles, entryPath])].sort();
-
-  if (sourceFiles.length === 0) {
-    throw new Error(`No ${language} sources found in: ${directory}`);
-  }
-
-  return sourceFiles;
+  return [...new Set([...scannedFiles, entryPath])].sort();
 }
 
 function getBinaryName(entryPath: string) {
@@ -593,7 +625,6 @@ async function prepareNativeExecution({
 
   if (!useCache || !(await pathExists(artifactPath))) {
     await mkdir(artifactDir, { recursive: true });
-    const sourceDir = dirname(entryPath);
     let compileTarget = entryPath;
     let compileCwd = cwd;
 
@@ -949,7 +980,9 @@ export function describeFirstDifference(expected: string, actual: string) {
     return `First difference at line ${lineIndex + 1}, column ${column}: expected ${JSON.stringify(expectedLine)}, received ${JSON.stringify(actualLine)}.`;
   }
 
-  return "Outputs differ.";
+  throw new Error(
+    "Internal error: outputs differ but no differing line was found.",
+  );
 }
 
 export async function loadConfig(cwd: string = process.cwd()) {
@@ -998,7 +1031,7 @@ export async function resolveEntryFile(
 async function resolveEntryFileWithLanguage(
   cwd: string,
   requestedEntry?: string,
-): Promise<{ path: string; language: SupportedLanguage | null }> {
+): Promise<{ path: string; language: SupportedLanguage }> {
   if (requestedEntry !== undefined) {
     if (requestedEntry.trim() === "") {
       throw new Error("Entry file must not be empty.");
@@ -1026,7 +1059,8 @@ async function resolveEntryFileWithLanguage(
   );
 
   if (mainMatches.length === 1) {
-    return { path: resolve(cwd, mainMatches[0]), language: null };
+    const matched = detectedFiles.find((f) => f.name === mainMatches[0])!;
+    return { path: matched.path, language: matched.language };
   }
 
   if (mainMatches.length > 1) {
@@ -1036,7 +1070,7 @@ async function resolveEntryFileWithLanguage(
   }
 
   if (candidateFiles.length === 1) {
-    return { path: resolve(cwd, candidateFiles[0]), language: null };
+    return { path: detectedFiles[0]!.path, language: detectedFiles[0]!.language };
   }
 
   if (candidateFiles.length === 0) {
@@ -1055,16 +1089,10 @@ async function resolveEntryFileWithLanguage(
 export async function runFile(request: RunRequest): Promise<RunResult> {
   const cwd = resolve(request.cwd ?? process.cwd());
   const config = await loadConfig(cwd);
-  const { path: entryPath, language: resolvedLanguage } =
-    await resolveEntryFileWithLanguage(cwd, request.entryFile);
-  const language = resolvedLanguage ?? (await detectLanguageForFile(entryPath));
-
-  if (!language) {
-    throw new Error(
-      `Could not detect a supported language for ${entryPath}. Supported extensions: ${SUPPORTED_SOURCE_EXTENSIONS.join(", ")}.`,
-    );
-  }
-
+  const { path: entryPath, language } = await resolveEntryFileWithLanguage(
+    cwd,
+    request.entryFile,
+  );
   const timeoutMs = request.timeoutMs ?? config.timeout;
   ensureNonNegativeInteger(timeoutMs, "timeoutMs");
   const useCache = request.useCache ?? true;

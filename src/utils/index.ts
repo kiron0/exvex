@@ -113,10 +113,6 @@ export function detectLanguageFromPath(
   return LANGUAGE_EXTENSIONS[extname(filePath).toLowerCase()] ?? null;
 }
 
-export function isSupportedSourceFile(filePath: string) {
-  return detectLanguageFromPath(filePath) !== null;
-}
-
 export function splitCommand(command: string) {
   const trimmed = command.trim();
 

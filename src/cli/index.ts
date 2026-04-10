@@ -510,7 +510,9 @@ function parseTestArgs(args: string[]): ParsedCliArgs {
       }
 
       if (hadEntryBefore ? remaining.length > 0 : remaining.length > 1) {
-        throw new Error(`Unexpected argument: ${remaining[1] ?? remaining[0]}`);
+        throw new Error(
+          `Unexpected argument: ${hadEntryBefore ? remaining[0] : remaining[1]}`,
+        );
       }
 
       break;
@@ -757,6 +759,12 @@ function logRunFailure(
       isTty,
     ),
   );
+
+  const stderr = result.stderr.trim();
+
+  if (stderr) {
+    logger.error(stderr);
+  }
 }
 
 export async function runCli(
@@ -862,13 +870,21 @@ export function isCliEntrypoint(
     return false;
   }
 
+  const normalizePathToHref = (path: string) => {
+    try {
+      return pathToFileURL(realpathSync(path)).href;
+    } catch {
+      return pathToFileURL(path).href;
+    }
+  };
+
   try {
-    return (
-      pathToFileURL(realpathSync(entryPath)).href ===
-      pathToFileURL(realpathSync(fileURLToPath(moduleUrl))).href
-    );
+    const modulePath =
+      moduleUrl.startsWith("file:") ? fileURLToPath(moduleUrl) : moduleUrl;
+
+    return normalizePathToHref(entryPath) === normalizePathToHref(modulePath);
   } catch {
-    return moduleUrl === pathToFileURL(entryPath).href;
+    return false;
   }
 }
 
