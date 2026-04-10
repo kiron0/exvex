@@ -619,15 +619,18 @@ async function stageMultiFileSourcesWithExtension({
 
   for (const sourceFile of sourceFiles) {
     const relativeSourcePath = relative(sourceRoot, sourceFile);
-    const sourceContent =
+    const extensionlessTargetBaseName =
       sourceFile.endsWith(requiredExtension) || !resolveExtensionlessTargetBaseName
         ? null
-        : await readFile(sourceFile, "utf8");
+        : resolveExtensionlessTargetBaseName(
+            sourceFile,
+            await readFile(sourceFile, "utf8"),
+          );
     const targetRelativePath = sourceFile.endsWith(requiredExtension)
       ? relativeSourcePath
       : join(
           dirname(relativeSourcePath),
-          `${resolveExtensionlessTargetBaseName(sourceFile, sourceContent ?? "") ?? basename(relativeSourcePath)}${requiredExtension}`,
+          `${extensionlessTargetBaseName ?? basename(relativeSourcePath)}${requiredExtension}`,
         );
     const stagedPath = join(stagedSourceDir, targetRelativePath);
 
