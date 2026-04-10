@@ -881,24 +881,28 @@ describe("runFile", () => {
     expect(result.stdout).toContain("go-nested-ok");
   });
 
-  rustIt("runs rust sources end to end", async () => {
-    const directory = await createTempDir("exvex-rust-");
+  rustIt(
+    "runs rust sources end to end",
+    async () => {
+      const directory = await createTempDir("exvex-rust-");
 
-    await writeFile(
-      join(directory, "main.rs"),
-      ["fn main() {", '    println!("rust-ok");', "}"].join("\n"),
-    );
+      await writeFile(
+        join(directory, "main.rs"),
+        ["fn main() {", '    println!("rust-ok");', "}"].join("\n"),
+      );
 
-    const result = await runFile({
-      cwd: directory,
-      entryFile: "main.rs",
-      timeoutMs: 10000,
-    });
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "main.rs",
+        timeoutMs: 10000,
+      });
 
-    expect(result.language).toBe("rust");
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("rust-ok");
-  });
+      expect(result.language).toBe("rust");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("rust-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
   rustIt(
     "invalidates the rust cache when a sibling module changes",
@@ -946,6 +950,7 @@ describe("runFile", () => {
       expect(firstResult.stdout).toContain("rust-first");
       expect(secondResult.stdout).toContain("rust-second");
     },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
   );
 
   javaIt("runs java sources that declare a package", async () => {
