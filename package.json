@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "test": "vitest run tests/cli.test.ts tests/lib.test.ts",
+    "test": "vitest run",
     "test:build": "bun scripts/test-build.ts",
     "test:pack": "bun pm pack --dry-run > .exvex-pack.txt && bun scripts/test-pack.ts",
     "test:smoke": "node dist/index.js --help",
@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "prettier": "^3.8.2",
+    "prettier": "^3.8.3",
     "terser": "^5.46.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",

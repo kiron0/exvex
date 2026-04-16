@@ -11,5 +11,6 @@ export default defineConfig([
     sourcemap: false,
     target: "es2022",
     minify: "terser",
+    ignoreWatch: ["tests/files/**"],
   },
 ]);

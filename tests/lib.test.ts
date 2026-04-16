@@ -1,4 +1,5 @@
 import { execFileSync } from "child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import {
   mkdtemp,
   mkdir,
@@ -10,7 +11,6 @@ import {
 } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
-import { afterEach, describe, expect, it } from "vitest";
 import {
   buildCacheKey,
   detectLanguageForFile,
@@ -27,7 +27,7 @@ import { splitCommand } from "../src/utils";
 
 const tempDirs: string[] = [];
 const hasGo = commandExists("go");
-const hasRustc = commandExists("rustc", ["--version"]);
+const hasRustc = hasUsableRustToolchain();
 const hasJava = commandExists("javac") && commandExists("java");
 const hasKotlinc = commandExists("kotlinc") && commandExists("java");
 const hasRuby = commandExists("ruby");
@@ -46,6 +46,28 @@ function commandExists(command: string, args: string[] = ["--version"]) {
     return true;
   } catch {
     return false;
+  }
+}
+
+function hasUsableRustToolchain() {
+  if (!commandExists("rustc", ["--version"])) {
+    return false;
+  }
+
+  const probeDir = mkdtempSync(join(tmpdir(), "exvex-rust-probe-"));
+  const sourcePath = join(probeDir, "probe.rs");
+  const binaryPath = join(probeDir, process.platform === "win32" ? "probe.exe" : "probe");
+
+  try {
+    writeFileSync(sourcePath, "fn main() {}\n");
+    execFileSync("rustc", ["-O", sourcePath, "-o", binaryPath], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true });
   }
 }
 
