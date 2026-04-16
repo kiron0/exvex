@@ -12,7 +12,7 @@ export const DEFAULT_STRESS_ITERATIONS = 100;
 export const DEFAULT_CONFIG: ResolvedExvexConfig = {
   c: "gcc -O2 -std=c11",
   cpp: "g++ -O2 -std=c++17",
-  python: "python3",
+  python: process.platform === "win32" ? "python" : "python3",
   javaCompiler: "javac",
   javaRuntime: "java",
   javascript: "node",
