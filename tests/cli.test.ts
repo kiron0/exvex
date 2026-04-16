@@ -3,6 +3,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { PassThrough } from "stream";
 import { pathToFileURL } from "url";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getHelpText,
   isCliEntrypoint,
