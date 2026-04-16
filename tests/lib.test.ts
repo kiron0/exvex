@@ -24,6 +24,7 @@ import {
   writeStressArtifacts,
 } from "../src/lib";
 import { splitCommand } from "../src/utils";
+import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
 const hasGo = commandExists("go");
