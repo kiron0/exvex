@@ -36,14 +36,7 @@ const CACHE_KEY_ENTRY_PATH = join(tmpdir(), "exvex-cache-key-main.cpp");
 
 function commandExists(command: string, args: string[] = ["--version"]) {
   try {
-    if (process.platform === "win32") {
-      execFileSync(command, args, { stdio: "ignore" });
-    } else {
-      execFileSync("/bin/sh", ["-c", `command -v ${command}`], {
-        stdio: "ignore",
-      });
-      execFileSync(command, args, { stdio: "ignore" });
-    }
+    execFileSync(command, args, { stdio: "ignore" });
     return true;
   } catch {
     return false;
