@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   test-pr-quick:
-    name: Test (PR quick, ubuntu-latest, Node 22)
+    name: "Test (PR quick, ubuntu-latest, Node 22)"
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -72,7 +72,7 @@ jobs:
         run: node dist/index.js --help
 
   test-main-matrix:
-    name: Test (matrix: ${{ matrix.os }}, Node ${{ matrix.node }})
+    name: "Test (matrix: ${{ matrix.os }}, Node ${{ matrix.node }})"
     if: github.event_name != 'pull_request'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
