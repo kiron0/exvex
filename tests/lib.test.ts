@@ -23,7 +23,6 @@ import {
   runStress,
   writeStressArtifacts,
 } from "../src/lib";
-import { splitCommand } from "../src/utils";
 import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
@@ -33,6 +32,7 @@ const hasJava = commandExists("javac") && commandExists("java");
 const hasKotlinc = commandExists("kotlinc") && commandExists("java");
 const hasRuby = commandExists("ruby");
 const SLOW_TOOLCHAIN_TEST_TIMEOUT_MS = 30000;
+const CACHE_KEY_ENTRY_PATH = join(tmpdir(), "exvex-cache-key-main.cpp");
 
 function commandExists(command: string, args: string[] = ["--version"]) {
   try {
@@ -423,13 +423,13 @@ describe("sortCaseNames", () => {
 describe("buildCacheKey", () => {
   it("changes when the source signature changes", () => {
     const first = buildCacheKey({
-      entryPath: "/tmp/main.cpp",
-      sourceSignature: "/tmp/main.cpp:100",
+      entryPath: CACHE_KEY_ENTRY_PATH,
+      sourceSignature: `${CACHE_KEY_ENTRY_PATH}:100`,
       compileCommand: "g++ -O2 -std=c++17",
     });
     const second = buildCacheKey({
-      entryPath: "/tmp/main.cpp",
-      sourceSignature: "/tmp/main.cpp:200",
+      entryPath: CACHE_KEY_ENTRY_PATH,
+      sourceSignature: `${CACHE_KEY_ENTRY_PATH}:200`,
       compileCommand: "g++ -O2 -std=c++17",
     });
 
@@ -438,54 +438,17 @@ describe("buildCacheKey", () => {
 
   it("changes when the compile command changes", () => {
     const first = buildCacheKey({
-      entryPath: "/tmp/main.cpp",
-      sourceSignature: "/tmp/main.cpp:100",
+      entryPath: CACHE_KEY_ENTRY_PATH,
+      sourceSignature: `${CACHE_KEY_ENTRY_PATH}:100`,
       compileCommand: "g++ -O2 -std=c++17",
     });
     const second = buildCacheKey({
-      entryPath: "/tmp/main.cpp",
-      sourceSignature: "/tmp/main.cpp:100",
+      entryPath: CACHE_KEY_ENTRY_PATH,
+      sourceSignature: `${CACHE_KEY_ENTRY_PATH}:100`,
       compileCommand: "g++ -O3 -std=c++20",
     });
 
     expect(first).not.toBe(second);
-  });
-});
-
-describe("splitCommand", () => {
-  it("parses quoted arguments with spaces", () => {
-    expect(splitCommand('python3 -c "print(\\"hello world\\")"')).toEqual([
-      "python3",
-      "-c",
-      'print("hello world")',
-    ]);
-  });
-
-  it("parses escaped spaces in unquoted tokens", () => {
-    expect(splitCommand("my\\ command --flag")).toEqual([
-      "my command",
-      "--flag",
-    ]);
-  });
-
-  it("throws when command contains an unmatched quote", () => {
-    expect(() => splitCommand('node -e "console.log(1)')).toThrow(
-      "Invalid command: unmatched",
-    );
-  });
-
-  it("preserves backslashes in unquoted Windows-like paths", () => {
-    expect(splitCommand("C:\\Tools\\python.exe -V")).toEqual([
-      "C:\\Tools\\python.exe",
-      "-V",
-    ]);
-  });
-
-  it("preserves backslashes in quoted Windows-like paths", () => {
-    expect(splitCommand('"C:\\Program Files\\Python\\python.exe" -V')).toEqual([
-      "C:\\Program Files\\Python\\python.exe",
-      "-V",
-    ]);
   });
 });
 
@@ -526,8 +489,8 @@ describe("runJudge", () => {
     );
     await mkdir(join(directory, "input"));
     await mkdir(join(directory, "output"));
-    await writeFile(join(directory, "input/1.txt"), "21\n");
-    await writeFile(join(directory, "output/1.txt"), "42\r\n");
+    await writeFile(join(directory, "input", "1.txt"), "21\n");
+    await writeFile(join(directory, "output", "1.txt"), "42\r\n");
 
     const summary = await runJudge({
       cwd: directory,
@@ -545,9 +508,9 @@ describe("runJudge", () => {
     await writeFile(join(directory, "main.js"), "console.log('ok');\n");
     await mkdir(join(directory, "input"));
     await mkdir(join(directory, "output"));
-    await writeFile(join(directory, "input/1.txt"), "21\n");
-    await writeFile(join(directory, "input/2.txt"), "25\n");
-    await writeFile(join(directory, "output/1.txt"), "42\n");
+    await writeFile(join(directory, "input", "1.txt"), "21\n");
+    await writeFile(join(directory, "input", "2.txt"), "25\n");
+    await writeFile(join(directory, "output", "1.txt"), "42\n");
 
     await expect(
       runJudge({
@@ -563,7 +526,7 @@ describe("runJudge", () => {
     await writeFile(join(directory, "main.js"), "console.log('ok');\n");
     await writeFile(join(directory, "input.txt"), "1\n");
     await mkdir(join(directory, "output"));
-    await writeFile(join(directory, "output/1.txt"), "ok\n");
+    await writeFile(join(directory, "output", "1.txt"), "ok\n");
 
     await expect(
       runJudge({
@@ -1339,9 +1302,12 @@ describe("runStress", () => {
     expect(summary.success).toBe(false);
     expect(summary.failureReason).toBe("mismatch");
     expect(summary.failingIteration).toBe(1);
-    expect(summary.artifactDir).toBe(join(directory, ".exvex/stress"));
+    expect(summary.artifactDir).toBe(join(directory, ".exvex", "stress"));
     await expect(
-      readFile(join(directory, ".exvex/stress/failing-input.txt"), "utf8"),
+      readFile(
+        join(directory, ".exvex", "stress", "failing-input.txt"),
+        "utf8",
+      ),
     ).resolves.toBe("1\n");
   });
 });

@@ -141,8 +141,7 @@ export function splitCommand(command: string) {
           nextCharacter !== undefined &&
           (/\s/.test(nextCharacter) ||
             nextCharacter === '"' ||
-            nextCharacter === "'" ||
-            nextCharacter === "\\")
+            nextCharacter === "'")
         ) {
           escaping = true;
           continue;
@@ -183,7 +182,6 @@ export function splitCommand(command: string) {
       if (
         nextCharacter !== undefined &&
         (nextCharacter === '"' ||
-          nextCharacter === "\\" ||
           nextCharacter === "$" ||
           nextCharacter === "`")
       ) {

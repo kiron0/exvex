@@ -13,6 +13,12 @@ import {
   type CliDependencies,
 } from "../src/cli";
 
+const PROJECT_DIR = join(tmpdir(), "exvex-cli-project");
+const MAIN_FILE = join(PROJECT_DIR, "main.js");
+const INPUT_DIR = join(PROJECT_DIR, "input");
+const OUTPUT_DIR = join(PROJECT_DIR, "output");
+const STRESS_ARTIFACT_DIR = join(PROJECT_DIR, ".exvex", "stress");
+
 function createDependencies(overrides: Partial<CliDependencies> = {}) {
   const logger = {
     log: vi.fn(),
@@ -23,16 +29,16 @@ function createDependencies(overrides: Partial<CliDependencies> = {}) {
   const stderr = new PassThrough();
 
   const dependencies: CliDependencies = {
-    cwd: () => "/tmp/project",
+    cwd: () => PROJECT_DIR,
     stdin,
     stdout,
     stderr,
     isTty: false,
     logger,
     runFile: vi.fn(async () => ({
-      entryFile: "/tmp/project/main.js",
+      entryFile: MAIN_FILE,
       language: "javascript" as const,
-      command: ["node", "/tmp/project/main.js"],
+      command: ["node", MAIN_FILE],
       exitCode: 0,
       stdout: "",
       stderr: "",
@@ -41,23 +47,23 @@ function createDependencies(overrides: Partial<CliDependencies> = {}) {
       timedOut: false,
     })),
     runJudge: vi.fn(async () => ({
-      entryFile: "/tmp/project/main.js",
+      entryFile: MAIN_FILE,
       total: 2,
       passed: 2,
       failed: 0,
       cases: [
         {
           name: "1",
-          inputPath: "/tmp/project/input/1.txt",
-          outputPath: "/tmp/project/output/1.txt",
+          inputPath: join(INPUT_DIR, "1.txt"),
+          outputPath: join(OUTPUT_DIR, "1.txt"),
           passed: true,
           expected: "2\n",
           actual: "2\n",
           durationMs: 10,
           runResult: {
-            entryFile: "/tmp/project/main.js",
+            entryFile: MAIN_FILE,
             language: "javascript" as const,
-            command: ["node", "/tmp/project/main.js"],
+            command: ["node", MAIN_FILE],
             exitCode: 0,
             stdout: "2\n",
             stderr: "",
@@ -68,16 +74,16 @@ function createDependencies(overrides: Partial<CliDependencies> = {}) {
         },
         {
           name: "2",
-          inputPath: "/tmp/project/input/2.txt",
-          outputPath: "/tmp/project/output/2.txt",
+          inputPath: join(INPUT_DIR, "2.txt"),
+          outputPath: join(OUTPUT_DIR, "2.txt"),
           passed: true,
           expected: "4\n",
           actual: "4\n",
           durationMs: 12,
           runResult: {
-            entryFile: "/tmp/project/main.js",
+            entryFile: MAIN_FILE,
             language: "javascript" as const,
-            command: ["node", "/tmp/project/main.js"],
+            command: ["node", MAIN_FILE],
             exitCode: 0,
             stdout: "4\n",
             stderr: "",
@@ -458,7 +464,7 @@ describe("runCli", () => {
 
     expect(dependencies.runFile).toHaveBeenCalledWith({
       entryFile: "main.js",
-      cwd: "/tmp/project",
+      cwd: PROJECT_DIR,
       inputFile: undefined,
       timeoutMs: undefined,
       useCache: true,
@@ -486,23 +492,23 @@ describe("runCli", () => {
   it("prints judge summaries and returns a failing status when any case fails", async () => {
     const { dependencies, logger } = createDependencies({
       runJudge: vi.fn(async () => ({
-        entryFile: "/tmp/project/main.js",
+        entryFile: MAIN_FILE,
         total: 2,
         passed: 1,
         failed: 1,
         cases: [
           {
             name: "1",
-            inputPath: "/tmp/project/input/1.txt",
-            outputPath: "/tmp/project/output/1.txt",
+            inputPath: join(INPUT_DIR, "1.txt"),
+            outputPath: join(OUTPUT_DIR, "1.txt"),
             passed: true,
             expected: "2\n",
             actual: "2\n",
             durationMs: 10,
             runResult: {
-              entryFile: "/tmp/project/main.js",
+              entryFile: MAIN_FILE,
               language: "javascript" as const,
-              command: ["node", "/tmp/project/main.js"],
+              command: ["node", MAIN_FILE],
               exitCode: 0,
               stdout: "2\n",
               stderr: "",
@@ -513,17 +519,17 @@ describe("runCli", () => {
           },
           {
             name: "2",
-            inputPath: "/tmp/project/input/2.txt",
-            outputPath: "/tmp/project/output/2.txt",
+            inputPath: join(INPUT_DIR, "2.txt"),
+            outputPath: join(OUTPUT_DIR, "2.txt"),
             passed: false,
             expected: "4\n",
             actual: "5\n",
             durationMs: 11,
             diff: 'First difference at line 1, column 1: expected "4", received "5".',
             runResult: {
-              entryFile: "/tmp/project/main.js",
+              entryFile: MAIN_FILE,
               language: "javascript" as const,
-              command: ["node", "/tmp/project/main.js"],
+              command: ["node", MAIN_FILE],
               exitCode: 0,
               stdout: "5\n",
               stderr: "",
@@ -553,7 +559,7 @@ describe("runCli", () => {
         failureReason: "mismatch" as const,
         failingIteration: 5,
         message: "First difference at line 1, column 1.",
-        artifactDir: "/tmp/project/.exvex/stress",
+        artifactDir: STRESS_ARTIFACT_DIR,
       })),
     });
 
@@ -565,7 +571,7 @@ describe("runCli", () => {
       "FAIL Stress test stopped at iteration 5.",
     );
     expect(logger.log).toHaveBeenCalledWith(
-      "  Artifacts: /tmp/project/.exvex/stress",
+      `  Artifacts: ${STRESS_ARTIFACT_DIR}`,
     );
   });
 
@@ -584,9 +590,9 @@ describe("runCli", () => {
   it("returns a failing exit code when a process fails", async () => {
     const { dependencies, logger } = createDependencies({
       runFile: vi.fn(async () => ({
-        entryFile: "/tmp/project/main.js",
+        entryFile: MAIN_FILE,
         language: "javascript" as const,
-        command: ["node", "/tmp/project/main.js"],
+        command: ["node", MAIN_FILE],
         exitCode: 1,
         stdout: "",
         stderr: "",
@@ -619,9 +625,9 @@ describe("main", () => {
   it("exits with the failing exit code", async () => {
     const { dependencies } = createDependencies({
       runFile: vi.fn(async () => ({
-        entryFile: "/tmp/project/main.js",
+        entryFile: MAIN_FILE,
         language: "javascript" as const,
-        command: ["node", "/tmp/project/main.js"],
+        command: ["node", MAIN_FILE],
         exitCode: 1,
         stdout: "",
         stderr: "",
@@ -650,7 +656,9 @@ describe("isCliEntrypoint", () => {
   });
 
   it("returns false for another script path", () => {
-    expect(isCliEntrypoint(["node", "/tmp/other-script.mjs"])).toBe(false);
+    expect(
+      isCliEntrypoint(["node", join(tmpdir(), "other-script.mjs")]),
+    ).toBe(false);
   });
 
   it("returns true for the current module path", () => {
