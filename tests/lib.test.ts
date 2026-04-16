@@ -611,7 +611,9 @@ describe("runFile", () => {
     SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
   );
 
-  it("cleans temporary artifacts created by --no-cache", async () => {
+it(
+  "cleans temporary artifacts created by --no-cache",
+  async () => {
     const directory = await createTempDir("exvex-runfile-");
 
     await writeFile(
@@ -638,144 +640,158 @@ describe("runFile", () => {
     await expect(
       rm(result.artifactPath ?? "", { recursive: true, force: false }),
     ).rejects.toThrow();
-  });
+  },
+  SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+);
 
-  it("invalidates the compile cache when source contents change with preserved timestamps", async () => {
-    const directory = await createTempDir("exvex-cache-");
-    const entryPath = join(directory, "main.cpp");
+  it(
+    "invalidates the compile cache when source contents change with preserved timestamps",
+    async () => {
+      const directory = await createTempDir("exvex-cache-");
+      const entryPath = join(directory, "main.cpp");
 
-    await writeFile(
-      entryPath,
-      [
-        "#include <iostream>",
-        "int main() {",
-        '  std::cout << "first" << std::endl;',
-        "  return 0;",
-        "}",
-      ].join("\n"),
-    );
+      await writeFile(
+        entryPath,
+        [
+          "#include <iostream>",
+          "int main() {",
+          '  std::cout << "first" << std::endl;',
+          "  return 0;",
+          "}",
+        ].join("\n"),
+      );
 
-    const firstResult = await runFile({
-      cwd: directory,
-      entryFile: "main.cpp",
-      useCache: true,
-      timeoutMs: 10000,
-    });
-    const originalStat = await stat(entryPath);
+      const firstResult = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        useCache: true,
+        timeoutMs: 10000,
+      });
+      const originalStat = await stat(entryPath);
 
-    await writeFile(
-      entryPath,
-      [
-        "#include <iostream>",
-        "int main() {",
-        '  std::cout << "second" << std::endl;',
-        "  return 0;",
-        "}",
-      ].join("\n"),
-    );
-    await utimes(entryPath, originalStat.atime, originalStat.mtime);
+      await writeFile(
+        entryPath,
+        [
+          "#include <iostream>",
+          "int main() {",
+          '  std::cout << "second" << std::endl;',
+          "  return 0;",
+          "}",
+        ].join("\n"),
+      );
+      await utimes(entryPath, originalStat.atime, originalStat.mtime);
 
-    const secondResult = await runFile({
-      cwd: directory,
-      entryFile: "main.cpp",
-      useCache: true,
-      timeoutMs: 10000,
-    });
+      const secondResult = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        useCache: true,
+        timeoutMs: 10000,
+      });
 
-    expect(firstResult.stdout).toContain("first");
-    expect(secondResult.stdout).toContain("second");
-  });
+      expect(firstResult.stdout).toContain("first");
+      expect(secondResult.stdout).toContain("second");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
-  it("invalidates the C++ cache when a local header changes", async () => {
-    const directory = await createTempDir("exvex-cpp-header-cache-");
+  it(
+    "invalidates the C++ cache when a local header changes",
+    async () => {
+      const directory = await createTempDir("exvex-cpp-header-cache-");
 
-    await writeFile(
-      join(directory, "helper.hpp"),
-      ["#pragma once", "", '#define EXVEX_MESSAGE "header-first"'].join("\n"),
-    );
-    await writeFile(
-      join(directory, "main.cpp"),
-      [
-        "#include <iostream>",
-        '#include "helper.hpp"',
-        "",
-        "int main() {",
-        "  std::cout << EXVEX_MESSAGE << std::endl;",
-        "  return 0;",
-        "}",
-      ].join("\n"),
-    );
+      await writeFile(
+        join(directory, "helper.hpp"),
+        ["#pragma once", "", '#define EXVEX_MESSAGE "header-first"'].join("\n"),
+      );
+      await writeFile(
+        join(directory, "main.cpp"),
+        [
+          "#include <iostream>",
+          '#include "helper.hpp"',
+          "",
+          "int main() {",
+          "  std::cout << EXVEX_MESSAGE << std::endl;",
+          "  return 0;",
+          "}",
+        ].join("\n"),
+      );
 
-    const firstResult = await runFile({
-      cwd: directory,
-      entryFile: "main.cpp",
-      useCache: true,
-      timeoutMs: 10000,
-    });
+      const firstResult = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        useCache: true,
+        timeoutMs: 10000,
+      });
 
-    await writeFile(
-      join(directory, "helper.hpp"),
-      ["#pragma once", "", '#define EXVEX_MESSAGE "header-second"'].join("\n"),
-    );
+      await writeFile(
+        join(directory, "helper.hpp"),
+        ["#pragma once", "", '#define EXVEX_MESSAGE "header-second"'].join("\n"),
+      );
 
-    const secondResult = await runFile({
-      cwd: directory,
-      entryFile: "main.cpp",
-      useCache: true,
-      timeoutMs: 10000,
-    });
+      const secondResult = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        useCache: true,
+        timeoutMs: 10000,
+      });
 
-    expect(firstResult.stdout).toContain("header-first");
-    expect(secondResult.stdout).toContain("header-second");
-  });
+      expect(firstResult.stdout).toContain("header-first");
+      expect(secondResult.stdout).toContain("header-second");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
-  it("invalidates the C++ cache when a nested local header changes", async () => {
-    const directory = await createTempDir("exvex-cpp-nested-header-cache-");
+  it(
+    "invalidates the C++ cache when a nested local header changes",
+    async () => {
+      const directory = await createTempDir("exvex-cpp-nested-header-cache-");
 
-    await mkdir(join(directory, "include"));
-    await writeFile(
-      join(directory, "include", "helper.hpp"),
-      ["#pragma once", "", '#define EXVEX_NESTED_MESSAGE "nested-first"'].join(
-        "\n",
-      ),
-    );
-    await writeFile(
-      join(directory, "main.cpp"),
-      [
-        "#include <iostream>",
-        '#include "include/helper.hpp"',
-        "",
-        "int main() {",
-        "  std::cout << EXVEX_NESTED_MESSAGE << std::endl;",
-        "  return 0;",
-        "}",
-      ].join("\n"),
-    );
+      await mkdir(join(directory, "include"));
+      await writeFile(
+        join(directory, "include", "helper.hpp"),
+        ["#pragma once", "", '#define EXVEX_NESTED_MESSAGE "nested-first"'].join(
+          "\n",
+        ),
+      );
+      await writeFile(
+        join(directory, "main.cpp"),
+        [
+          "#include <iostream>",
+          '#include "include/helper.hpp"',
+          "",
+          "int main() {",
+          "  std::cout << EXVEX_NESTED_MESSAGE << std::endl;",
+          "  return 0;",
+          "}",
+        ].join("\n"),
+      );
 
-    const firstResult = await runFile({
-      cwd: directory,
-      entryFile: "main.cpp",
-      useCache: true,
-      timeoutMs: 10000,
-    });
+      const firstResult = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        useCache: true,
+        timeoutMs: 10000,
+      });
 
-    await writeFile(
-      join(directory, "include", "helper.hpp"),
-      ["#pragma once", "", '#define EXVEX_NESTED_MESSAGE "nested-second"'].join(
-        "\n",
-      ),
-    );
+      await writeFile(
+        join(directory, "include", "helper.hpp"),
+        ["#pragma once", "", '#define EXVEX_NESTED_MESSAGE "nested-second"'].join(
+          "\n",
+        ),
+      );
 
-    const secondResult = await runFile({
-      cwd: directory,
-      entryFile: "main.cpp",
-      useCache: true,
-      timeoutMs: 10000,
-    });
+      const secondResult = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        useCache: true,
+        timeoutMs: 10000,
+      });
 
-    expect(firstResult.stdout).toContain("nested-first");
-    expect(secondResult.stdout).toContain("nested-second");
-  });
+      expect(firstResult.stdout).toContain("nested-first");
+      expect(secondResult.stdout).toContain("nested-second");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
   it("kills descendant processes when a run times out", async () => {
     const directory = await createTempDir("exvex-timeout-");
@@ -893,42 +909,46 @@ describe("runFile", () => {
     SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
   );
 
-  goIt("ignores nested Go files from subdirectories", async () => {
-    const directory = await createTempDir("exvex-go-nested-dir-");
-    const nestedDir = join(directory, "util");
-    await mkdir(nestedDir, { recursive: true });
+  goIt(
+    "ignores nested Go files from subdirectories",
+    async () => {
+      const directory = await createTempDir("exvex-go-nested-dir-");
+      const nestedDir = join(directory, "util");
+      await mkdir(nestedDir, { recursive: true });
 
-    await writeFile(
-      join(directory, "main.go"),
-      [
-        "package main",
-        'import "fmt"',
-        "",
-        "func main() {",
-        '    fmt.Println("go-nested-ok")',
-        "}",
-      ].join("\n"),
-    );
-    await writeFile(
-      join(nestedDir, "helper.go"),
-      [
-        "package util",
-        "",
-        "func Hidden() string {",
-        '    return "ignored"',
-        "}",
-      ].join("\n"),
-    );
+      await writeFile(
+        join(directory, "main.go"),
+        [
+          "package main",
+          'import "fmt"',
+          "",
+          "func main() {",
+          '    fmt.Println("go-nested-ok")',
+          "}",
+        ].join("\n"),
+      );
+      await writeFile(
+        join(nestedDir, "helper.go"),
+        [
+          "package util",
+          "",
+          "func Hidden() string {",
+          '    return "ignored"',
+          "}",
+        ].join("\n"),
+      );
 
-    const result = await runFile({
-      cwd: directory,
-      entryFile: "main.go",
-      timeoutMs: 10000,
-    });
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "main.go",
+        timeoutMs: 10000,
+      });
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("go-nested-ok");
-  });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("go-nested-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
   rustIt(
     "runs rust sources end to end",
@@ -1002,36 +1022,42 @@ describe("runFile", () => {
     SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
   );
 
-  javaIt("runs java sources that declare a package", async () => {
-    const directory = await createTempDir("exvex-java-package-");
-    const packageDir = join(directory, "demo");
-    await mkdir(packageDir);
+  javaIt(
+    "runs java sources that declare a package",
+    async () => {
+      const directory = await createTempDir("exvex-java-package-");
+      const packageDir = join(directory, "demo");
+      await mkdir(packageDir);
 
-    await writeFile(
-      join(packageDir, "Main.java"),
-      [
-        "package demo;",
-        "",
-        "public class Main {",
-        "  public static void main(String[] args) {",
-        '    System.out.println("java-package-ok");',
-        "  }",
-        "}",
-      ].join("\n"),
-    );
+      await writeFile(
+        join(packageDir, "Main.java"),
+        [
+          "package demo;",
+          "",
+          "public class Main {",
+          "  public static void main(String[] args) {",
+          '    System.out.println("java-package-ok");',
+          "  }",
+          "}",
+        ].join("\n"),
+      );
 
-    const result = await runFile({
-      cwd: directory,
-      entryFile: "demo/Main.java",
-      timeoutMs: 15000,
-    });
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "demo/Main.java",
+        timeoutMs: 15000,
+      });
 
-    expect(result.language).toBe("java");
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("java-package-ok");
-  });
+      expect(result.language).toBe("java");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("java-package-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
-  javaIt("runs java sources with nested package dependencies", async () => {
+  javaIt(
+    "runs java sources with nested package dependencies",
+    async () => {
     const directory = await createTempDir("exvex-java-nested-package-");
     const packageDir = join(directory, "demo");
     const utilDir = join(packageDir, "util");
@@ -1070,10 +1096,12 @@ describe("runFile", () => {
       timeoutMs: 15000,
     });
 
-    expect(result.language).toBe("java");
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("java-nested-ok");
-  });
+      expect(result.language).toBe("java");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("java-nested-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
   javaIt(
     "runs an extensionless Java entry file detected from its contents",
@@ -1104,6 +1132,7 @@ describe("runFile", () => {
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("java-extensionless-ok");
     },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
   );
 
   javaIt(
@@ -1135,6 +1164,7 @@ describe("runFile", () => {
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("java-extensionless-rename-ok");
     },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
   );
 
   const kotlinIt = hasKotlinc ? it : it.skip;
