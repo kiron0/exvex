@@ -715,14 +715,11 @@ async function prepareNativeExecution({
     await mkdir(artifactDir, { recursive: true });
     let compileTarget = entryPath;
     let compileCwd = cwd;
+    let stagedGoSourceDir: string | undefined;
 
     if (language === "go") {
-      // Build Go in an isolated staging directory so we can support
-      // extensionless detected entry files without mutating the user's source
-      // directory or relying on a local go.mod file.
-      const stagedSourceDir = join(artifactDir, "go-src");
-      await rm(stagedSourceDir, { recursive: true, force: true });
-      await mkdir(stagedSourceDir, { recursive: true });
+      const stagedSourceDir = await mkdtemp(join(tmpdir(), "exvex-go-src-"));
+      stagedGoSourceDir = stagedSourceDir;
 
       let syntheticIndex = 0;
       for (const sourceFile of sourceFiles) {
@@ -744,12 +741,19 @@ async function prepareNativeExecution({
       language === "go"
         ? [...compileParts.slice(1), "-o", artifactPath, compileTarget]
         : [...compileParts.slice(1), compileTarget, "-o", artifactPath];
-    const compileResult = await runProcess({
-      command: compileParts[0],
-      args: compileArgs,
-      cwd: compileCwd,
-      timeoutMs,
-    });
+    let compileResult: ProcessRunResult;
+    try {
+      compileResult = await runProcess({
+        command: compileParts[0],
+        args: compileArgs,
+        cwd: compileCwd,
+        timeoutMs,
+      });
+    } finally {
+      if (stagedGoSourceDir) {
+        await rm(stagedGoSourceDir, { recursive: true, force: true });
+      }
+    }
 
     if (compileResult.timedOut || compileResult.exitCode !== 0) {
       throw new Error(

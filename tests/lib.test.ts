@@ -10,7 +10,7 @@ import {
   writeFile,
 } from "fs/promises";
 import { tmpdir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 import {
   buildCacheKey,
   detectLanguageForFile,
@@ -601,6 +601,9 @@ describe("runFile", () => {
         const result = await goRun;
         expect(result.exitCode).toBe(0);
         expect(result.stdout.trim()).toBe("hello");
+        await expect(
+          stat(join(dirname(result.artifactPath ?? ""), "go-src")),
+        ).rejects.toThrow();
       } else {
         await expect(goRun).rejects.toThrow();
         await expect(goRun).rejects.not.toThrow(/No go sources found/);
