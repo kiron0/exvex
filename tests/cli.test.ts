@@ -381,6 +381,8 @@ describe("getHelpText", () => {
     expect(helpText).toContain("exvex test [entry]");
     expect(helpText).toContain("exvex stress <solution> <brute> <generator>");
     expect(helpText).toContain("exvex.config.json");
+    expect(helpText).toContain("use 0 to disable timeout");
+    expect(helpText).toContain(".exvex/cache");
     expect(helpText).toContain(".go");
     expect(helpText).toContain(".rb");
   });

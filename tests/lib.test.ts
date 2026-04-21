@@ -1167,6 +1167,39 @@ it(
     SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
   );
 
+  javaIt(
+    "runs an extensionless Java entry file when the declared main class has leading annotations",
+    async () => {
+      const directory = await createTempDir("exvex-java-extensionless-annotated-");
+      const entryPath = join(directory, "solution");
+
+      await writeFile(
+        entryPath,
+        [
+          "@SuppressWarnings(\"all\")",
+          "public class Main {",
+          "  public static void main(String[] args) {",
+          '    System.out.println("java-extensionless-annotated-ok");',
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+
+      await expect(detectLanguageForFile(entryPath)).resolves.toBe("java");
+
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "solution",
+        timeoutMs: 15000,
+      });
+
+      expect(result.language).toBe("java");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("java-extensionless-annotated-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
+
   const kotlinIt = hasKotlinc ? it : it.skip;
   kotlinIt(
     "runs multi-file kotlin sources end to end",

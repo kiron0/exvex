@@ -79,11 +79,15 @@ interface DetectedSourceFile {
 }
 
 function getJavaDeclaredMainClassName(content: string) {
-  const classMatch = content.match(
-    /^\s*(?:public\s+)?(?:final\s+)?class\s+([A-Za-z_]\w*)/m,
+  const contentWithoutStandaloneAnnotations = content.replace(
+    /^\s*@[A-Za-z_][\w.]*(?:\([^)]*\))?\s*$/gm,
+    "",
+  );
+  const typeMatch = contentWithoutStandaloneAnnotations.match(
+    /^\s*(?:public\s+)?(?:(?:abstract|final|sealed|non-sealed|static)\s+)*(?:class|record|enum|interface)\s+([A-Za-z_]\w*)/m,
   );
 
-  return classMatch?.[1] ?? null;
+  return typeMatch?.[1] ?? null;
 }
 
 function terminateProcessTree(pid: number) {

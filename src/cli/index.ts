@@ -17,7 +17,7 @@ import { fileURLToPath, pathToFileURL } from "url";
 import type { JudgeSummary, RunRequest, StressSummary } from "../interface";
 import { formatDurationMs, runFile, runJudge, runStress } from "../lib";
 
-const CANCEL_MESSAGE = "Thanks for using exvex..!";
+const CANCEL_MESSAGE = "Thanks for using exvex.";
 
 type CliLogger = Pick<Console, "error" | "log">;
 
@@ -651,16 +651,17 @@ Options:
   --input-dir=DIR  Input directory for judge mode (also: --input-dir DIR)
   --output-dir=DIR Output directory for judge mode (also: --output-dir DIR)
   --iterations=N   Number of stress iterations (default: 100; also: --iterations N)
-  --timeout=MS     Override execution timeout in milliseconds (also: --timeout MS)
+  --timeout=MS     Override execution timeout in milliseconds; use 0 to disable timeout
   --               Stop option parsing; treat following args as positional values
-  --no-cache       Disable compile cache for this invocation
+  --no-cache       Disable compile cache for this invocation (.exvex/cache by default)
   --help, -h       Show this help
 
 Supported extensions:
   .c, .cpp, .py, .java, .js, .go, .rs, .kt, .php, .rb
 
 Configuration:
-  exvex reads exvex.config.json from the current working directory when present.
+  exvex reads exvex.config.json from current working directory when present.
+  Default judge dirs: input/ and output/.
 `.trim();
 }
 

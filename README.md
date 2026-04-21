@@ -26,6 +26,12 @@ exvex is built for competitive programmers who switch between languages and want
 npm install -g exvex
 ```
 
+Or run it without a global install:
+
+```bash
+npx exvex --help
+```
+
 Node.js 18 or newer is required.
 
 ## Usage
@@ -73,6 +79,27 @@ exvex stress -- --solution.py --brute.py --gen.py
 
 On the first mismatch or runtime failure, exvex writes the failing input and both outputs to `.exvex/stress/`.
 
+### Options at a glance
+
+- `--input FILE` or `--input=FILE`: read stdin from file in run mode
+- `--input-dir DIR` or `--input-dir=DIR`: override judge input directory
+- `--output-dir DIR` or `--output-dir=DIR`: override judge output directory
+- `--iterations N` or `--iterations=N`: set stress-test iteration count, default `100`
+- `--timeout MS` or `--timeout=MS`: set timeout in milliseconds, default `2000`
+- `--timeout 0`: disable timeout entirely
+- `--no-cache`: bypass compile cache for current invocation
+- `--help` or `-h`: print help
+- `--`: stop option parsing so later arguments are treated as positional filenames
+
+## Behavior Notes
+
+- Compiled artifacts are cached under `.exvex/cache/` by default for C, C++, Java, Go, Rust, and Kotlin
+- `--no-cache` uses temporary build artifacts instead of reusing cached ones
+- Judge mode defaults to `input/` and `output/` directories unless overridden in config or CLI flags
+- Output comparison normalizes line endings and ignores trailing whitespace at end of output
+- Stress failures write `failing-input.txt`, `solution-output.txt`, and `brute-output.txt` under `.exvex/stress/`
+- Extensionless files work when exvex can detect language from a shebang or recognizable source pattern
+
 ## Supported Languages
 
 - `.c` via `gcc -O2 -std=c11`
@@ -112,6 +139,8 @@ Create `exvex.config.json` in the working directory to override defaults:
   "outputDir": "output"
 }
 ```
+
+Config command values are tokenized directly by exvex. Keep them as executable-plus-arguments strings such as `"python3"` or `"g++ -O2 -std=c++20"`, not shell pipelines or shell-only syntax.
 
 ## Sample Directory Layout
 
