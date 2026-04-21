@@ -1200,6 +1200,24 @@ it(
     SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
   );
 
+  it("detects extensionless Java files when main modifiers use a different valid order", async () => {
+    const directory = await createTempDir("exvex-java-extensionless-modifiers-");
+    const entryPath = join(directory, "Main");
+
+    await writeFile(
+      entryPath,
+      [
+        "class Main {",
+        "  static public void main(String[] args) {",
+        '    System.out.println("java-static-public-ok");',
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    await expect(detectLanguageForFile(entryPath)).resolves.toBe("java");
+  });
+
   const kotlinIt = hasKotlinc ? it : it.skip;
   kotlinIt(
     "runs multi-file kotlin sources end to end",
@@ -1255,21 +1273,25 @@ it(
   );
 
   const rubyIt = hasRuby ? it : it.skip;
-  rubyIt("runs ruby sources end to end", async () => {
-    const directory = await createTempDir("exvex-ruby-");
+  rubyIt(
+    "runs ruby sources end to end",
+    async () => {
+      const directory = await createTempDir("exvex-ruby-");
 
-    await writeFile(join(directory, "main.rb"), "puts 'ruby-ok'\n");
+      await writeFile(join(directory, "main.rb"), "puts 'ruby-ok'\n");
 
-    const result = await runFile({
-      cwd: directory,
-      entryFile: "main.rb",
-      timeoutMs: 5000,
-    });
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "main.rb",
+        timeoutMs: 10000,
+      });
 
-    expect(result.language).toBe("ruby");
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("ruby-ok");
-  });
+      expect(result.language).toBe("ruby");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("ruby-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
   it("reports a missing runtime command with a config hint", async () => {
     const directory = await createTempDir("exvex-missing-tool-");

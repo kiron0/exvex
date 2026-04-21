@@ -79,15 +79,18 @@ interface DetectedSourceFile {
 }
 
 function getJavaDeclaredMainClassName(content: string) {
-  const contentWithoutStandaloneAnnotations = content.replace(
-    /^\s*@[A-Za-z_][\w.]*(?:\([^)]*\))?\s*$/gm,
-    "",
-  );
-  const typeMatch = contentWithoutStandaloneAnnotations.match(
+  const typeMatch = stripJavaAnnotationsForSignatureMatching(content).match(
     /^\s*(?:public\s+)?(?:(?:abstract|final|sealed|non-sealed|static)\s+)*(?:class|record|enum|interface)\s+([A-Za-z_]\w*)/m,
   );
 
   return typeMatch?.[1] ?? null;
+}
+
+function stripJavaAnnotationsForSignatureMatching(content: string) {
+  return content.replace(
+    /^\s*(?:@[A-Za-z_][\w.]*(?:\([^)\r\n]*\))?\s*)+/gm,
+    "",
+  );
 }
 
 function terminateProcessTree(pid: number) {
@@ -178,6 +181,7 @@ function ensurePositiveInteger(value: number, label: string) {
 function detectLanguageFromContent(content: string): SupportedLanguage | null {
   const trimmed = content.trimStart();
   const shebang = content.split("\n", 1)[0] ?? "";
+  const javaLikeContent = stripJavaAnnotationsForSignatureMatching(content);
 
   if (shebang.startsWith("#!")) {
     if (/\bnode(\s|$)/.test(shebang)) {
@@ -217,8 +221,12 @@ function detectLanguageFromContent(content: string): SupportedLanguage | null {
   }
 
   if (
-    /^\s*(?:public\s+)?(?:final\s+)?class\s+\w+/m.test(content) &&
-    /^\s*public\s+static\s+void\s+main\s*\(/m.test(content)
+    /^\s*(?:public\s+)?(?:(?:abstract|final|sealed|non-sealed|static)\s+)*(?:class|record|enum|interface)\s+\w+/m.test(
+      javaLikeContent,
+    ) &&
+    /^\s*(?:(?:public|protected|private|static|final|synchronized|strictfp)\s+)*void\s+main\s*\(\s*String(?:\s*\[\s*\]|\s*\.\.\.)\s+\w+\s*\)/m.test(
+      javaLikeContent,
+    )
   ) {
     return "java";
   }
