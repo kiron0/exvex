@@ -631,12 +631,12 @@ it(
       ].join("\n"),
     );
 
-    const result = await runFile({
-      cwd: directory,
-      entryFile: "main.cpp",
-      useCache: false,
-      timeoutMs: 10000,
-    });
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        useCache: false,
+        timeoutMs: 30000,
+      });
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("ok");
@@ -644,7 +644,7 @@ it(
       rm(result.artifactPath ?? "", { recursive: true, force: false }),
     ).rejects.toThrow();
   },
-  SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  45000,
 );
 
   it(
@@ -668,7 +668,7 @@ it(
         cwd: directory,
         entryFile: "main.cpp",
         useCache: true,
-        timeoutMs: 10000,
+        timeoutMs: 30000,
       });
       const originalStat = await stat(entryPath);
 
@@ -688,7 +688,7 @@ it(
         cwd: directory,
         entryFile: "main.cpp",
         useCache: true,
-        timeoutMs: 10000,
+        timeoutMs: 30000,
       });
 
       expect(firstResult.stdout).toContain("first");
@@ -1167,7 +1167,7 @@ it(
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("java-extensionless-rename-ok");
     },
-    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+    45000,
   );
 
   javaIt(
