@@ -1,4 +1,6 @@
 import { execFile as execFileCallback } from "child_process";
+import { readFile } from "fs/promises";
+import { join } from "path";
 import { fileURLToPath } from "url";
 import { promisify } from "util";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -7,6 +9,7 @@ const execFile = promisify(execFileCallback);
 const bunCommand = process.platform === "win32" ? "bun.exe" : "bun";
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
 const bunDescribe = (await canRunBun()) ? describe : describe.skip;
+let packageVersion = "";
 
 async function canRunBun() {
   try {
@@ -21,6 +24,13 @@ async function canRunBun() {
 
 bunDescribe("built CLI", () => {
   beforeAll(async () => {
+    const packageJson = JSON.parse(
+      await readFile(join(rootDir, "package.json"), "utf8"),
+    ) as {
+      version?: string;
+    };
+
+    packageVersion = packageJson.version ?? "";
     await execFile(bunCommand, ["run", "build"], {
       cwd: rootDir,
     });
@@ -50,7 +60,7 @@ bunDescribe("built CLI", () => {
       },
     );
 
-    expect(stdout.trim()).toBe("0.1.1");
+    expect(stdout.trim()).toBe(packageVersion);
   });
 
   it("returns a validation error from the built artifact", async () => {
