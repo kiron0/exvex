@@ -1435,6 +1435,7 @@ function getJsonErrorCode(message: string) {
 
   if (
     message.includes("Unknown option:") ||
+    message.includes("Unexpected argument:") ||
     message.includes("must not be empty") ||
     message.includes("must be an integer") ||
     message.includes("must be at least") ||

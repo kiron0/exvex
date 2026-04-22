@@ -1187,6 +1187,22 @@ describe("runCli", () => {
     expect(logger.error).not.toHaveBeenCalled();
   });
 
+  it("classifies unexpected extra arguments as JSON parse errors", async () => {
+    const { dependencies, logger } = createDependencies();
+
+    await expect(
+      runCli(["test", "main.js", "extra", "--json"], dependencies),
+    ).resolves.toBe(1);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"code": "ARG_PARSE_ERROR"'),
+    );
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"message": "Unexpected argument: extra"'),
+    );
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
   it("does not force JSON mode when --json is consumed as an option value", async () => {
     const { dependencies, logger } = createDependencies();
 
