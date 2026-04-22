@@ -1009,6 +1009,27 @@ describe("runCli", () => {
     expect(logger.log).toHaveBeenCalledWith("  exvex test main.cpp");
   });
 
+  it("prints overwritten init paths in the text summary", async () => {
+    const { dependencies, logger } = createDependencies({
+      initProject: vi.fn(async () => ({
+        cwd: PROJECT_DIR,
+        language: "cpp" as const,
+        preset: "test" as const,
+        createdPaths: ["input/1.txt"],
+        overwrittenPaths: ["main.cpp"],
+        nextCommand: "exvex test main.cpp",
+      })),
+    });
+
+    await expect(
+      runCli(["init", "cpp", "--force"], dependencies),
+    ).resolves.toBe(0);
+
+    expect(logger.log).toHaveBeenCalledWith("Created/updated files:");
+    expect(logger.log).toHaveBeenCalledWith("  input/1.txt");
+    expect(logger.log).toHaveBeenCalledWith("  main.cpp");
+  });
+
   it("prints init summaries as JSON when --json is used", async () => {
     const { dependencies, logger } = createDependencies({
       initProject: vi.fn(async () => ({
@@ -1131,6 +1152,28 @@ describe("runCli", () => {
 
     expect(logger.log).toHaveBeenCalledWith(
       expect.stringContaining('"code": "ARG_PARSE_ERROR"'),
+    );
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("classifies init path validation errors as JSON parse errors", async () => {
+    const { dependencies, logger } = createDependencies({
+      initProject: vi.fn(async () => {
+        throw new Error("Entry file must stay inside current directory.");
+      }),
+    });
+
+    await expect(
+      runCli(["init", "cpp", "--entry", "../main.cpp", "--json"], dependencies),
+    ).resolves.toBe(1);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"code": "ARG_PARSE_ERROR"'),
+    );
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '"message": "Entry file must stay inside current directory."',
+      ),
     );
     expect(logger.error).not.toHaveBeenCalled();
   });
@@ -1271,7 +1314,7 @@ describe("initProject", () => {
       expect(summary.createdPaths).toContain(".vscode/tasks.json");
       expect(summary.createdPaths).toContain(".gitignore");
       expect(summary.nextCommand).toBe(
-        "cd a && exvex test --input-dir=samples/in --output-dir=samples/out main.py",
+        "exvex test --input-dir=a/samples/in --output-dir=a/samples/out a/main.py",
       );
       expect(readFileSync(join(cwd, ".gitignore"), "utf8")).toContain(
         ".exvex/",
@@ -1284,6 +1327,25 @@ describe("initProject", () => {
       expect(
         readFileSync(join(cwd, "a", "samples", "in", "1.txt"), "utf8"),
       ).toBe("");
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("uses shell-independent nextCommand for contest stress scaffolds", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-contest-stress-"));
+
+    try {
+      const summary = await initProject({
+        cwd,
+        language: "cpp",
+        preset: "stress",
+        contest: true,
+      });
+
+      expect(summary.nextCommand).toBe(
+        "exvex stress a/solution.cpp a/brute.cpp a/gen.cpp",
+      );
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

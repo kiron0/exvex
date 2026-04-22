@@ -462,9 +462,11 @@ function buildSingleWorkspace(
 
     return {
       files,
-      nextCommand: baseDir
-        ? `cd ${formatArg(baseDir)} && ${formatStressCommand(solutionFile, bruteFile, generatorFile)}`
-        : formatStressCommand(solutionFile, bruteFile, generatorFile),
+      nextCommand: formatStressCommand(
+        prefix(solutionFile),
+        prefix(bruteFile),
+        prefix(generatorFile),
+      ),
     };
   }
 
@@ -497,17 +499,17 @@ function buildSingleWorkspace(
 
     return {
       files,
-      nextCommand: baseDir
-        ? `cd ${formatArg(baseDir)} && ${formatTestCommand(entryFile, inputDir, outputDir)}`
-        : formatTestCommand(entryFile, inputDir, outputDir),
+      nextCommand: formatTestCommand(
+        prefix(entryFile),
+        prefix(inputDir),
+        prefix(outputDir),
+      ),
     };
   }
 
   return {
     files,
-    nextCommand: baseDir
-      ? `cd ${formatArg(baseDir)} && ${formatRunCommand(entryFile)}`
-      : formatRunCommand(entryFile),
+    nextCommand: formatRunCommand(prefix(entryFile)),
   };
 }
 

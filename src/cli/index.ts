@@ -1280,6 +1280,10 @@ function getJsonErrorCode(message: string) {
     message.includes("An entry file is required.") ||
     message.includes("Unsupported init language:") ||
     message.includes("Invalid init preset:") ||
+    message.includes("must be relative to current directory.") ||
+    message.includes("must stay inside current directory.") ||
+    message.includes('must end with "') ||
+    message.includes("must use a valid Java class name before") ||
     normalizedMessage.includes("stress init") ||
     normalizedMessage.includes("require --preset=stress") ||
     normalizedMessage.includes("require --preset=test") ||
@@ -1430,6 +1434,10 @@ function logInitSummary(summary: InitSummary, logger: CliLogger) {
   logger.log(heading);
 
   for (const path of summary.createdPaths) {
+    logger.log(`  ${path}`);
+  }
+
+  for (const path of summary.overwrittenPaths) {
     logger.log(`  ${path}`);
   }
 
