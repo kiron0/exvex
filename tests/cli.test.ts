@@ -195,9 +195,7 @@ describe("parseCliArgs", () => {
   });
 
   it("allows dash-prefixed space-separated option values for file and dir paths", () => {
-    expect(
-      parseCliArgs(["main.cpp", "--input", "-sample.txt"]),
-    ).toEqual({
+    expect(parseCliArgs(["main.cpp", "--input", "-sample.txt"])).toEqual({
       help: false,
       command: "run",
       entryFile: "main.cpp",
@@ -468,6 +466,18 @@ describe("parseCliArgs", () => {
     );
   });
 
+  it("does not swallow following option tokens as dash-prefixed values", () => {
+    expect(() =>
+      parseCliArgs(["main.cpp", "--input", "--timeout", "10"]),
+    ).toThrow("--input must not be empty.");
+    expect(() =>
+      parseCliArgs(["test", "--input-dir", "--output-dir", "out", "main.cpp"]),
+    ).toThrow("--input-dir must not be empty.");
+    expect(() => parseCliArgs(["init", "cpp", "--entry", "--json"])).toThrow(
+      "--entry must not be empty.",
+    );
+  });
+
   it("rejects invalid stress iteration values", () => {
     expect(() =>
       parseCliArgs(["stress", "a.js", "b.js", "c.js", "--iterations=0"]),
@@ -625,9 +635,9 @@ describe("command formatters", () => {
   });
 
   it("formats stress paths with -- when any positional path starts with dash", () => {
-    expect(formatStressCommand("solution.cpp", "-brute.cpp", "gen file.cpp")).toBe(
-      'exvex stress -- solution.cpp -brute.cpp "gen file.cpp"',
-    );
+    expect(
+      formatStressCommand("solution.cpp", "-brute.cpp", "gen file.cpp"),
+    ).toBe('exvex stress -- solution.cpp -brute.cpp "gen file.cpp"');
   });
 });
 
@@ -799,7 +809,9 @@ describe("runCli", () => {
       promptForArgs: undefined,
     });
     await expect(runCli([], first.dependencies)).resolves.toBe(1);
-    expect(first.logger.error).toHaveBeenCalledWith("Error: prompt loader broke");
+    expect(first.logger.error).toHaveBeenCalledWith(
+      "Error: prompt loader broke",
+    );
 
     shouldFail = false;
     const second = createDependencies({
@@ -1182,7 +1194,10 @@ describe("runCli", () => {
     const { dependencies, logger } = createDependencies();
 
     await expect(
-      runCli(["init", "--preset=stress", "--solution=sol.cpp", "--json"], dependencies),
+      runCli(
+        ["init", "--preset=stress", "--solution=sol.cpp", "--json"],
+        dependencies,
+      ),
     ).resolves.toBe(1);
 
     expect(logger.log).toHaveBeenCalledWith(
@@ -1319,7 +1334,10 @@ describe("initProject", () => {
       expect(readFileSync(join(cwd, ".gitignore"), "utf8")).toContain(
         ".exvex/",
       );
-      const tasksJson = readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8");
+      const tasksJson = readFileSync(
+        join(cwd, ".vscode", "tasks.json"),
+        "utf8",
+      );
       expect(tasksJson).toContain(
         '"command": "exvex test --input-dir=samples/in --output-dir=samples/out main.py"',
       );
@@ -1548,7 +1566,10 @@ describe("initProject", () => {
         entryFile: "./solve.py",
       });
 
-      const tasksJson = readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8");
+      const tasksJson = readFileSync(
+        join(cwd, ".vscode", "tasks.json"),
+        "utf8",
+      );
       expect(tasksJson).toContain(
         '"command": "exvex test --input-dir=samples/in --output-dir=samples/out solve.py"',
       );

@@ -679,7 +679,10 @@ function parseOptionValue(
   args: string[],
   index: number,
   optionName: string,
-  { allowDashPrefixed = false }: { allowDashPrefixed?: boolean } = {},
+  {
+    allowDashPrefixed = false,
+    reservedOptions = [],
+  }: { allowDashPrefixed?: boolean; reservedOptions?: string[] } = {},
 ) {
   const arg = args[index]!;
   const inlinePrefix = `${optionName}=`;
@@ -687,7 +690,12 @@ function parseOptionValue(
   if (arg === optionName) {
     const nextValue = args[index + 1];
 
-    if (!nextValue || (!allowDashPrefixed && nextValue.startsWith("-"))) {
+    if (
+      !nextValue ||
+      nextValue === "--" ||
+      (!allowDashPrefixed && nextValue.startsWith("-")) ||
+      (allowDashPrefixed && reservedOptions.includes(nextValue))
+    ) {
       throw new Error(`${optionName} must not be empty.`);
     }
 
@@ -782,6 +790,7 @@ function parseRunArgs(args: string[]): ParsedCliArgs {
 
     const inputOption = parseOptionValue(args, index, "--input", {
       allowDashPrefixed: true,
+      reservedOptions: ["--input", "--timeout", "--json", "--no-cache", "--"],
     });
     if (inputOption) {
       inputFile = inputOption.value;
@@ -791,6 +800,7 @@ function parseRunArgs(args: string[]): ParsedCliArgs {
 
     const timeoutOption = parseOptionValue(args, index, "--timeout", {
       allowDashPrefixed: true,
+      reservedOptions: ["--input", "--timeout", "--json", "--no-cache", "--"],
     });
     if (timeoutOption) {
       timeoutMs = parseIntegerOption("--timeout", timeoutOption.value);
@@ -865,6 +875,14 @@ function parseTestArgs(args: string[]): ParsedCliArgs {
 
     const inputDirOption = parseOptionValue(args, index, "--input-dir", {
       allowDashPrefixed: true,
+      reservedOptions: [
+        "--input-dir",
+        "--output-dir",
+        "--timeout",
+        "--json",
+        "--no-cache",
+        "--",
+      ],
     });
     if (inputDirOption) {
       inputDir = inputDirOption.value;
@@ -874,6 +892,14 @@ function parseTestArgs(args: string[]): ParsedCliArgs {
 
     const outputDirOption = parseOptionValue(args, index, "--output-dir", {
       allowDashPrefixed: true,
+      reservedOptions: [
+        "--input-dir",
+        "--output-dir",
+        "--timeout",
+        "--json",
+        "--no-cache",
+        "--",
+      ],
     });
     if (outputDirOption) {
       outputDir = outputDirOption.value;
@@ -883,6 +909,14 @@ function parseTestArgs(args: string[]): ParsedCliArgs {
 
     const timeoutOption = parseOptionValue(args, index, "--timeout", {
       allowDashPrefixed: true,
+      reservedOptions: [
+        "--input-dir",
+        "--output-dir",
+        "--timeout",
+        "--json",
+        "--no-cache",
+        "--",
+      ],
     });
     if (timeoutOption) {
       timeoutMs = parseIntegerOption("--timeout", timeoutOption.value);
@@ -941,6 +975,13 @@ function parseStressArgs(args: string[]): ParsedCliArgs {
 
     const iterationsOption = parseOptionValue(args, index, "--iterations", {
       allowDashPrefixed: true,
+      reservedOptions: [
+        "--iterations",
+        "--timeout",
+        "--json",
+        "--no-cache",
+        "--",
+      ],
     });
     if (iterationsOption) {
       iterations = parseIntegerOption("--iterations", iterationsOption.value, {
@@ -952,6 +993,13 @@ function parseStressArgs(args: string[]): ParsedCliArgs {
 
     const timeoutOption = parseOptionValue(args, index, "--timeout", {
       allowDashPrefixed: true,
+      reservedOptions: [
+        "--iterations",
+        "--timeout",
+        "--json",
+        "--no-cache",
+        "--",
+      ],
     });
     if (timeoutOption) {
       timeoutMs = parseIntegerOption("--timeout", timeoutOption.value);
@@ -1092,6 +1140,25 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const entryOption = parseOptionValue(args, index, "--entry", {
       allowDashPrefixed: true,
+      reservedOptions: [
+        "--entry",
+        "--input-dir",
+        "--output-dir",
+        "--solution",
+        "--brute",
+        "--generator",
+        "--preset",
+        "--run",
+        "--test",
+        "--stress",
+        "--contest",
+        "--vscode",
+        "--gitignore",
+        "--json",
+        "--yes",
+        "--force",
+        "--",
+      ],
     });
     if (entryOption) {
       entryFile = entryOption.value;
@@ -1101,6 +1168,25 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const inputDirOption = parseOptionValue(args, index, "--input-dir", {
       allowDashPrefixed: true,
+      reservedOptions: [
+        "--entry",
+        "--input-dir",
+        "--output-dir",
+        "--solution",
+        "--brute",
+        "--generator",
+        "--preset",
+        "--run",
+        "--test",
+        "--stress",
+        "--contest",
+        "--vscode",
+        "--gitignore",
+        "--json",
+        "--yes",
+        "--force",
+        "--",
+      ],
     });
     if (inputDirOption) {
       inputDir = inputDirOption.value;
@@ -1110,6 +1196,25 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const outputDirOption = parseOptionValue(args, index, "--output-dir", {
       allowDashPrefixed: true,
+      reservedOptions: [
+        "--entry",
+        "--input-dir",
+        "--output-dir",
+        "--solution",
+        "--brute",
+        "--generator",
+        "--preset",
+        "--run",
+        "--test",
+        "--stress",
+        "--contest",
+        "--vscode",
+        "--gitignore",
+        "--json",
+        "--yes",
+        "--force",
+        "--",
+      ],
     });
     if (outputDirOption) {
       outputDir = outputDirOption.value;
@@ -1119,6 +1224,25 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const solutionOption = parseOptionValue(args, index, "--solution", {
       allowDashPrefixed: true,
+      reservedOptions: [
+        "--entry",
+        "--input-dir",
+        "--output-dir",
+        "--solution",
+        "--brute",
+        "--generator",
+        "--preset",
+        "--run",
+        "--test",
+        "--stress",
+        "--contest",
+        "--vscode",
+        "--gitignore",
+        "--json",
+        "--yes",
+        "--force",
+        "--",
+      ],
     });
     if (solutionOption) {
       solutionFile = solutionOption.value;
@@ -1128,6 +1252,25 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const bruteOption = parseOptionValue(args, index, "--brute", {
       allowDashPrefixed: true,
+      reservedOptions: [
+        "--entry",
+        "--input-dir",
+        "--output-dir",
+        "--solution",
+        "--brute",
+        "--generator",
+        "--preset",
+        "--run",
+        "--test",
+        "--stress",
+        "--contest",
+        "--vscode",
+        "--gitignore",
+        "--json",
+        "--yes",
+        "--force",
+        "--",
+      ],
     });
     if (bruteOption) {
       bruteFile = bruteOption.value;
@@ -1137,6 +1280,25 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const generatorOption = parseOptionValue(args, index, "--generator", {
       allowDashPrefixed: true,
+      reservedOptions: [
+        "--entry",
+        "--input-dir",
+        "--output-dir",
+        "--solution",
+        "--brute",
+        "--generator",
+        "--preset",
+        "--run",
+        "--test",
+        "--stress",
+        "--contest",
+        "--vscode",
+        "--gitignore",
+        "--json",
+        "--yes",
+        "--force",
+        "--",
+      ],
     });
     if (generatorOption) {
       generatorFile = generatorOption.value;

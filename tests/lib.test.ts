@@ -592,8 +592,11 @@ describe("resolveEntryFile", () => {
     await expect(
       getCompilationSourceFilesForTests(entryPath, "kotlin"),
     ).resolves.toEqual(
-      [join(directory, "Helper.kt"), join(nestedDir, "Nested.kt"), entryPath]
-        .sort(),
+      [
+        join(directory, "Helper.kt"),
+        join(nestedDir, "Nested.kt"),
+        entryPath,
+      ].sort(),
     );
   });
 });
@@ -738,7 +741,9 @@ describe("runJudge", () => {
 
     expect(summary.passed).toBe(1);
     expect(summary.failed).toBe(0);
-    expect(summary.cases[0]?.inputPath).toBe(join(problemDir, "input", "1.txt"));
+    expect(summary.cases[0]?.inputPath).toBe(
+      join(problemDir, "input", "1.txt"),
+    );
     expect(summary.cases[0]?.outputPath).toBe(
       join(problemDir, "output", "1.txt"),
     );
