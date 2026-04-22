@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { PassThrough } from "stream";
@@ -386,6 +386,9 @@ describe("parseCliArgs", () => {
     expect(() =>
       parseCliArgs(["init", "cpp", "--stress", "--input-dir=samples/in"]),
     ).toThrow("--input-dir and --output-dir cannot be used with stress init.");
+    expect(() =>
+      parseCliArgs(["init", "cpp", "--run", "--input-dir=samples/in"]),
+    ).toThrow("--input-dir and --output-dir require --preset=test.");
   });
 
   it("validates negative numeric values for space-separated numeric options", () => {
@@ -1105,6 +1108,30 @@ describe("initProject", () => {
     }
   });
 
+  it("fails before writing scaffold files when .gitignore path is a directory", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-gitignore-dir-"));
+    const gitignoreDir = join(cwd, ".gitignore");
+
+    try {
+      mkdirSync(gitignoreDir);
+
+      await expect(
+        initProject({
+          cwd,
+          language: "cpp",
+          preset: "run",
+          gitignore: true,
+        }),
+      ).rejects.toThrow(
+        'Cannot write file ".gitignore" because a directory already exists there.',
+      );
+
+      expect(() => readFileSync(join(cwd, "main.cpp"), "utf8")).toThrow();
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("creates stress scaffold files for java", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "exvex-init-stress-"));
 
@@ -1176,6 +1203,43 @@ describe("initProject", () => {
     }
   });
 
+  it("quotes shell-sensitive filenames in nextCommand", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-quote-next-"));
+
+    try {
+      const summary = await initProject({
+        cwd,
+        language: "cpp",
+        preset: "run",
+        entryFile: "main&1.cpp",
+      });
+
+      expect(summary.nextCommand).toBe('exvex "main&1.cpp"');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("quotes shell-sensitive filenames in vscode tasks", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-quote-vscode-"));
+
+    try {
+      await initProject({
+        cwd,
+        language: "python",
+        preset: "test",
+        vscode: true,
+        entryFile: "solve&go.py",
+      });
+
+      expect(
+        readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8"),
+      ).toContain('exvex test \\"solve&go.py\\"');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("rejects directory traversal in scaffold paths", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "exvex-init-traversal-"));
 
@@ -1188,6 +1252,45 @@ describe("initProject", () => {
           entryFile: "../main.cpp",
         }),
       ).rejects.toThrow("Entry file must stay inside current directory.");
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects test scaffold when input path parent is a file", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-input-parent-"));
+    writeFileSync(join(cwd, "input"), "occupied\n");
+
+    try {
+      await expect(
+        initProject({
+          cwd,
+          language: "cpp",
+          preset: "test",
+        }),
+      ).rejects.toThrow(
+        'Cannot create directory "input" because a file already exists there.',
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects vscode scaffold when .vscode path is a file", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-vscode-parent-"));
+    writeFileSync(join(cwd, ".vscode"), "occupied\n");
+
+    try {
+      await expect(
+        initProject({
+          cwd,
+          language: "cpp",
+          preset: "run",
+          vscode: true,
+        }),
+      ).rejects.toThrow(
+        'Cannot create directory ".vscode" because a file already exists there.',
+      );
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

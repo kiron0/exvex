@@ -1100,6 +1100,10 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
     throw new Error("--input-dir and --output-dir cannot be used with stress init.");
   }
 
+  if (resolvedPreset === "run" && (inputDir || outputDir)) {
+    throw new Error("--input-dir and --output-dir require --preset=test.");
+  }
+
   if (
     resolvedPreset !== "stress" &&
     (solutionFile || bruteFile || generatorFile)
@@ -1202,6 +1206,7 @@ function getJsonErrorCode(message: string) {
     message.includes("Invalid init preset:") ||
     message.includes("stress init") ||
     message.includes("require --preset=stress") ||
+    message.includes("require --preset=test") ||
     message.includes("cannot be used with stress init")
   ) {
     return "ARG_PARSE_ERROR";

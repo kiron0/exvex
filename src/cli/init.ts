@@ -410,7 +410,7 @@ function renderGeneratorTemplate(language: InitLanguage, filePath: string) {
 }
 
 function formatArg(value: string) {
-  return /\s/.test(value) ? JSON.stringify(value) : value;
+  return /^[A-Za-z0-9_./-]+$/.test(value) ? value : JSON.stringify(value);
 }
 
 function formatRunCommand(entryFile: string) {
@@ -614,6 +614,21 @@ async function getExistingPathType(path: string) {
   }
 }
 
+async function assertParentDirectoriesAvailable(cwd: string, relativePath: string) {
+  const segments = normalize(relativePath).split(/[\\/]+/).filter(Boolean);
+
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const parentRelativePath = segments.slice(0, index + 1).join("/");
+    const existingType = await getExistingPathType(join(cwd, parentRelativePath));
+
+    if (existingType === "file") {
+      throw new Error(
+        `Cannot create directory "${parentRelativePath}" because a file already exists there.`,
+      );
+    }
+  }
+}
+
 async function appendGitignore(
   cwd: string,
   createdPaths: string[],
@@ -647,6 +662,17 @@ async function appendGitignore(
   createdPaths.push(".gitignore");
 }
 
+async function validateGitignoreTarget(cwd: string) {
+  const gitignorePath = join(cwd, ".gitignore");
+  const existingType = await getExistingPathType(gitignorePath);
+
+  if (existingType === "directory") {
+    throw new Error(
+      'Cannot write file ".gitignore" because a directory already exists there.',
+    );
+  }
+}
+
 export async function initProject(request: InitRequest): Promise<InitSummary> {
   const workspacePlan = request.contest
     ? buildContestWorkspaces(request)
@@ -662,10 +688,15 @@ export async function initProject(request: InitRequest): Promise<InitSummary> {
     throw new Error("Scaffold plan produced duplicate file paths.");
   }
 
+  if (request.gitignore) {
+    await validateGitignoreTarget(request.cwd);
+  }
+
   const overwrittenPaths: string[] = [];
 
   for (const file of files) {
     const absolutePath = join(request.cwd, file.path);
+    await assertParentDirectoriesAvailable(request.cwd, file.path);
     const existingType = await getExistingPathType(absolutePath);
 
     if (existingType === "directory") {
