@@ -1,7 +1,7 @@
 {
   "name": "exvex",
   "description": "Run, judge, and stress-test competitive programming solutions from one CLI.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "bin": {
     "exvex": "dist/index.js"
