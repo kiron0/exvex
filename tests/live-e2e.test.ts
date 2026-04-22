@@ -109,4 +109,68 @@ liveDescribe("live CLI e2e", () => {
       await rm(directory, { recursive: true, force: true });
     }
   }, 180000);
+
+  it("runs php, java, and kotlin programs when their toolchains are available", async () => {
+    const [hasPhp, hasJavac, hasJava, hasKotlinc] = await Promise.all([
+      commandExists("php"),
+      commandExists("javac"),
+      commandExists("java"),
+      commandExists("kotlinc"),
+    ]);
+
+    if (!hasPhp || !hasJavac || !hasJava || !hasKotlinc) {
+      return;
+    }
+
+    const directory = await mkdtemp(join(tmpdir(), "exvex-live-jvm-"));
+
+    try {
+      await writeFile(
+        join(directory, "main.php"),
+        "<?php\necho \"php-live-ok\\n\";\n",
+      );
+      await writeFile(
+        join(directory, "Main.java"),
+        [
+          "public class Main {",
+          "  public static void main(String[] args) {",
+          '    System.out.println("java-live-ok");',
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+      await writeFile(
+        join(directory, "Main.kt"),
+        ['fun main() {', '    println("kotlin-live-ok")', "}"].join("\n"),
+      );
+
+      const phpResult = await execFile(
+        process.execPath,
+        [cliPath, "main.php"],
+        {
+          cwd: directory,
+        },
+      );
+      const javaResult = await execFile(
+        process.execPath,
+        [cliPath, "Main.java"],
+        {
+          cwd: directory,
+        },
+      );
+      const kotlinResult = await execFile(
+        process.execPath,
+        [cliPath, "Main.kt"],
+        {
+          cwd: directory,
+        },
+      );
+
+      expect(phpResult.stdout).toContain("php-live-ok");
+      expect(javaResult.stdout).toContain("java-live-ok");
+      expect(kotlinResult.stdout).toContain("kotlin-live-ok");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 180000);
 });

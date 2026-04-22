@@ -18,7 +18,8 @@ exvex is built for competitive programmers who switch between languages and want
 - Judge `input/*.txt` against `output/*.txt`
 - Stress test a solution against a brute-force implementation
 - Customize compiler commands and defaults with `exvex.config.json`
-- Prompt interactively when launched in a TTY without arguments
+- Emit structured `--json` output for editor and CI integrations
+- Prompt interactively when launched in a TTY without arguments, including optional `--json`
 
 ## Installation
 
@@ -46,7 +47,7 @@ exvex solution.java --timeout=3000
 exvex solution.java --timeout 3000
 ```
 
-When you run `exvex` with no arguments in an interactive terminal, it prompts for the mode and required files.
+When you run `exvex` with no arguments in an interactive terminal, it prompts for mode, required files, timeout, cache choice, and optional JSON output.
 
 ### Judge sample cases
 
@@ -65,6 +66,7 @@ exvex test --input-dir samples/in --output-dir samples/out
 exvex stress solution.cpp brute.cpp gen.cpp
 exvex stress solution.py brute.py gen.py --iterations=500 --timeout=2000
 exvex stress solution.py brute.py gen.py --iterations 500 --timeout 2000
+exvex stress solution.py brute.py gen.py --json
 ```
 
 All long options support both forms: `--option=value` and `--option value`.
@@ -77,7 +79,7 @@ exvex test -- --main.py
 exvex stress -- --solution.py --brute.py --gen.py
 ```
 
-On the first mismatch or runtime failure, exvex writes the failing input and both outputs to `.exvex/stress/`.
+On first mismatch or runtime failure, exvex writes failing input, both outputs, and `metadata.json` to `.exvex/stress/`. Set `stressArtifactMode` to `"timestamp"` if you want each failure preserved in its own directory instead of overwriting latest one.
 
 ### Options at a glance
 
@@ -85,6 +87,7 @@ On the first mismatch or runtime failure, exvex writes the failing input and bot
 - `--input-dir DIR` or `--input-dir=DIR`: override judge input directory
 - `--output-dir DIR` or `--output-dir=DIR`: override judge output directory
 - `--iterations N` or `--iterations=N`: set stress-test iteration count, default `100`
+- `--json`: print machine-readable JSON for run, judge, or stress mode
 - `--timeout MS` or `--timeout=MS`: set timeout in milliseconds, default `2000`
 - `--timeout 0`: disable timeout entirely
 - `--no-cache`: bypass compile cache for current invocation
@@ -98,7 +101,11 @@ On the first mismatch or runtime failure, exvex writes the failing input and bot
 - Judge mode defaults to `input/` and `output/` directories unless overridden in config or CLI flags
 - Output comparison normalizes line endings and ignores trailing whitespace at end of output
 - Stress failures write `failing-input.txt`, `solution-output.txt`, and `brute-output.txt` under `.exvex/stress/`
+- Stress failures also write `metadata.json` with iteration number, failure reason, and summary message
+- JSON error output includes structured codes for parse, config, and missing-toolchain failures
 - Extensionless files work when exvex can detect language from a shebang or recognizable source pattern
+- `retainTempArtifactsOnSuccess` and `retainTempArtifactsOnFailure` control whether `--no-cache` build artifacts are kept
+- `stressArtifactMode` controls whether stress failures overwrite `.exvex/stress/` or create timestamped directories
 
 ## Supported Languages
 
@@ -136,7 +143,10 @@ Create `exvex.config.json` in the working directory to override defaults:
   "timeout": 2000,
   "cacheDir": ".exvex/cache",
   "inputDir": "input",
-  "outputDir": "output"
+  "outputDir": "output",
+  "retainTempArtifactsOnSuccess": false,
+  "retainTempArtifactsOnFailure": false,
+  "stressArtifactMode": "overwrite"
 }
 ```
 

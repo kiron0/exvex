@@ -16,6 +16,7 @@ import type { Readable, Writable } from "stream";
 import { fileURLToPath, pathToFileURL } from "url";
 import type { JudgeSummary, RunRequest, StressSummary } from "../interface";
 import { formatDurationMs, runFile, runJudge, runStress } from "../lib";
+import { CONFIG_FILENAME } from "../utils";
 
 const CANCEL_MESSAGE = "Thanks for using exvex.";
 
@@ -27,6 +28,7 @@ type ParsedCliArgs =
     }
   | {
       help: false;
+      json?: boolean;
       command: "run";
       entryFile: string;
       inputFile?: string;
@@ -35,6 +37,7 @@ type ParsedCliArgs =
     }
   | {
       help: false;
+      json?: boolean;
       command: "test";
       entryFile?: string;
       inputDir?: string;
@@ -44,6 +47,7 @@ type ParsedCliArgs =
     }
   | {
       help: false;
+      json?: boolean;
       command: "stress";
       solutionFile: string;
       bruteFile: string;
@@ -155,6 +159,15 @@ async function promptForInteractiveArgs(): Promise<string[] | null> {
     return undefined;
   };
 
+  const jsonOutput = await confirm({
+    message: "Emit JSON output?",
+    initialValue: false,
+  });
+  if (isCancel(jsonOutput)) {
+    outro(CANCEL_MESSAGE);
+    return null;
+  }
+
   if (mode === "stress") {
     const solution = await text({
       message: "Solution file",
@@ -214,6 +227,7 @@ async function promptForInteractiveArgs(): Promise<string[] | null> {
 
     return [
       "stress",
+      ...(jsonOutput ? ["--json"] : []),
       ...(iterations ? [`--iterations=${iterations}`] : []),
       ...(timeout ? [`--timeout=${timeout}`] : []),
       ...(noCache ? ["--no-cache"] : []),
@@ -276,6 +290,7 @@ async function promptForInteractiveArgs(): Promise<string[] | null> {
 
     return [
       "test",
+      ...(jsonOutput ? ["--json"] : []),
       ...(inputDir ? [`--input-dir=${inputDir}`] : []),
       ...(outputDir ? [`--output-dir=${outputDir}`] : []),
       ...(timeout ? [`--timeout=${timeout}`] : []),
@@ -324,6 +339,7 @@ async function promptForInteractiveArgs(): Promise<string[] | null> {
   }
 
   return [
+    ...(jsonOutput ? ["--json"] : []),
     ...(inputFile ? [`--input=${inputFile}`] : []),
     ...(timeout ? [`--timeout=${timeout}`] : []),
     ...(noCache ? ["--no-cache"] : []),
@@ -420,6 +436,7 @@ function parseRunArgs(args: string[]): ParsedCliArgs {
   let inputFile: string | undefined;
   let timeoutMs: number | undefined;
   let useCache = true;
+  let json = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
@@ -446,6 +463,11 @@ function parseRunArgs(args: string[]): ParsedCliArgs {
 
     if (arg === "--no-cache") {
       useCache = false;
+      continue;
+    }
+
+    if (arg === "--json") {
+      json = true;
       continue;
     }
 
@@ -488,6 +510,7 @@ function parseRunArgs(args: string[]): ParsedCliArgs {
     inputFile,
     timeoutMs,
     useCache,
+    ...(json ? { json: true } : {}),
   };
 }
 
@@ -497,6 +520,7 @@ function parseTestArgs(args: string[]): ParsedCliArgs {
   let outputDir: string | undefined;
   let timeoutMs: number | undefined;
   let useCache = true;
+  let json = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
@@ -520,6 +544,11 @@ function parseTestArgs(args: string[]): ParsedCliArgs {
 
     if (arg === "--no-cache") {
       useCache = false;
+      continue;
+    }
+
+    if (arg === "--json") {
+      json = true;
       continue;
     }
 
@@ -566,6 +595,7 @@ function parseTestArgs(args: string[]): ParsedCliArgs {
     outputDir,
     timeoutMs,
     useCache,
+    ...(json ? { json: true } : {}),
   };
 }
 
@@ -574,6 +604,7 @@ function parseStressArgs(args: string[]): ParsedCliArgs {
   let iterations: number | undefined;
   let timeoutMs: number | undefined;
   let useCache = true;
+  let json = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
@@ -585,6 +616,11 @@ function parseStressArgs(args: string[]): ParsedCliArgs {
 
     if (arg === "--no-cache") {
       useCache = false;
+      continue;
+    }
+
+    if (arg === "--json") {
+      json = true;
       continue;
     }
 
@@ -630,6 +666,7 @@ function parseStressArgs(args: string[]): ParsedCliArgs {
     iterations,
     timeoutMs,
     useCache,
+    ...(json ? { json: true } : {}),
   };
 }
 
@@ -651,6 +688,7 @@ Options:
   --input-dir=DIR  Input directory for judge mode (also: --input-dir DIR)
   --output-dir=DIR Output directory for judge mode (also: --output-dir DIR)
   --iterations=N   Number of stress iterations (default: 100; also: --iterations N)
+  --json           Print machine-readable JSON summaries for run, test, or stress mode
   --timeout=MS     Override execution timeout in milliseconds; use 0 to disable timeout
   --               Stop option parsing; treat following args as positional values
   --no-cache       Disable compile cache for this invocation (.exvex/cache by default)
@@ -663,6 +701,43 @@ Configuration:
   exvex reads exvex.config.json from current working directory when present.
   Default judge dirs: input/ and output/.
 `.trim();
+}
+
+function emitJson(logger: CliLogger, payload: unknown) {
+  logger.log(JSON.stringify(payload, null, 2));
+}
+
+function getJsonErrorCode(message: string) {
+  if (
+    message.includes("Unknown option:") ||
+    message.includes("must not be empty") ||
+    message.includes("must be an integer") ||
+    message.includes("must be at least") ||
+    message.includes("requires exactly three files") ||
+    message.includes("An entry file is required.")
+  ) {
+    return "ARG_PARSE_ERROR";
+  }
+
+  if (message.includes('Required command not found on PATH: "')) {
+    return "COMMAND_NOT_FOUND";
+  }
+
+  if (
+    message.includes(CONFIG_FILENAME) ||
+    message.startsWith("Invalid config:")
+  ) {
+    return "CONFIG_ERROR";
+  }
+
+  return "CLI_ERROR";
+}
+
+function wantsJsonOutput(args: string[]) {
+  const endOfOptionsIndex = args.indexOf("--");
+  const argsForJsonCheck =
+    endOfOptionsIndex >= 0 ? args.slice(0, endOfOptionsIndex) : args;
+  return argsForJsonCheck.includes("--json");
 }
 
 export function parseCliArgs(args: string[]): ParsedCliArgs {
@@ -773,10 +848,9 @@ export async function runCli(
   dependencies: CliDependencies = defaultCliDependencies,
 ) {
   const { logger } = dependencies;
+  let parsedArgs: string[] | undefined;
 
   try {
-    let parsedArgs: string[] | undefined;
-
     if (args.length === 0 && dependencies.isTty) {
       const interactiveArgs = await (dependencies.promptForArgs
         ? dependencies.promptForArgs()
@@ -798,6 +872,7 @@ export async function runCli(
     }
 
     if (parsed.command === "run") {
+      const jsonMode = parsed.json === true;
       const runRequest: RunRequest = {
         entryFile: parsed.entryFile,
         cwd: dependencies.cwd(),
@@ -805,13 +880,19 @@ export async function runCli(
         timeoutMs: parsed.timeoutMs,
         useCache: parsed.useCache,
         stdin: parsed.inputFile ? null : dependencies.stdin,
-        stdout: dependencies.stdout,
-        stderr: dependencies.stderr,
+        stdout: jsonMode ? null : dependencies.stdout,
+        stderr: jsonMode ? null : dependencies.stderr,
       };
       const result = await dependencies.runFile(runRequest);
 
+      if (jsonMode) {
+        emitJson(logger, result);
+      }
+
       if (result.timedOut || result.exitCode !== 0) {
-        logRunFailure(result, logger, dependencies.isTty);
+        if (!jsonMode) {
+          logRunFailure(result, logger, dependencies.isTty);
+        }
         return 1;
       }
 
@@ -819,6 +900,7 @@ export async function runCli(
     }
 
     if (parsed.command === "test") {
+      const jsonMode = parsed.json === true;
       const summary = await dependencies.runJudge({
         entryFile: parsed.entryFile,
         cwd: dependencies.cwd(),
@@ -828,10 +910,15 @@ export async function runCli(
         useCache: parsed.useCache,
       });
 
-      logJudgeSummary(summary, logger, dependencies.isTty);
+      if (jsonMode) {
+        emitJson(logger, summary);
+      } else {
+        logJudgeSummary(summary, logger, dependencies.isTty);
+      }
       return summary.failed === 0 ? 0 : 1;
     }
 
+    const jsonMode = parsed.json === true;
     const summary = await dependencies.runStress({
       solutionFile: parsed.solutionFile,
       bruteFile: parsed.bruteFile,
@@ -842,10 +929,24 @@ export async function runCli(
       useCache: parsed.useCache,
     });
 
-    logStressSummary(summary, logger, dependencies.isTty);
+    if (jsonMode) {
+      emitJson(logger, summary);
+    } else {
+      logStressSummary(summary, logger, dependencies.isTty);
+    }
     return summary.success ? 0 : 1;
   } catch (error) {
-    logger.error(`Error: ${getErrorMessage(error)}`);
+    if (wantsJsonOutput(parsedArgs ?? args)) {
+      emitJson(logger, {
+        success: false,
+        error: {
+          code: getJsonErrorCode(getErrorMessage(error)),
+          message: getErrorMessage(error),
+        },
+      });
+    } else {
+      logger.error(`Error: ${getErrorMessage(error)}`);
+    }
     return 1;
   }
 }

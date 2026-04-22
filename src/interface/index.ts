@@ -29,6 +29,9 @@ export interface ExvexConfig {
   cacheDir?: string;
   inputDir?: string;
   outputDir?: string;
+  retainTempArtifactsOnSuccess?: boolean;
+  retainTempArtifactsOnFailure?: boolean;
+  stressArtifactMode?: "overwrite" | "timestamp";
 }
 
 export interface ResolvedExvexConfig {
@@ -48,6 +51,9 @@ export interface ResolvedExvexConfig {
   cacheDir: string;
   inputDir: string;
   outputDir: string;
+  retainTempArtifactsOnSuccess: boolean;
+  retainTempArtifactsOnFailure: boolean;
+  stressArtifactMode: "overwrite" | "timestamp";
 }
 
 export interface RunRequest {
@@ -121,6 +127,7 @@ export interface StressSummary {
   failingIteration?: number;
   message?: string;
   artifactDir?: string;
+  artifactMetadataPath?: string;
   generatorResult?: RunResult;
   solutionResult?: RunResult;
   bruteResult?: RunResult;

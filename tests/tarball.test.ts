@@ -58,6 +58,7 @@ bunDescribe("packed tarball", () => {
     expect(packOutput).toContain("LICENSE");
     expect(packOutput).toContain("README.md");
     expect(packOutput).toContain("dist/index.js");
+    expect(packOutput).not.toContain(".DS_Store");
   }, 120000);
 
   it("produces a runnable built artifact before packing", async () => {

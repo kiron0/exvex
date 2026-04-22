@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import {
   mkdtemp,
   mkdir,
+  readdir,
   readFile,
   rm,
   stat,
@@ -173,6 +174,19 @@ describe("loadConfig", () => {
     );
   });
 
+  it("rejects unknown config keys instead of silently ignoring typos", async () => {
+    const directory = await createTempDir("exvex-config-unknown-key-");
+
+    await writeFile(
+      join(directory, "exvex.config.json"),
+      JSON.stringify({ timeot: 1234 }, null, 2),
+    );
+
+    await expect(loadConfig(directory)).rejects.toThrow(
+      'Invalid config: unknown key "timeot".',
+    );
+  });
+
   it("rejects a directory named exvex.config.json with a clear error", async () => {
     const directory = await createTempDir("exvex-config-dir-");
     await mkdir(join(directory, "exvex.config.json"));
@@ -191,6 +205,41 @@ describe("loadConfig", () => {
     await expect(loadConfig(directory)).resolves.toMatchObject({
       timeout: 3500,
     });
+  });
+
+  it.each([
+    [{ timeout: 0 }, { timeout: 0 }],
+    [{ javascript: "node --trace-warnings" }, { javascript: "node --trace-warnings" }],
+    [{ retainTempArtifactsOnSuccess: true }, { retainTempArtifactsOnSuccess: true }],
+    [{ retainTempArtifactsOnFailure: true }, { retainTempArtifactsOnFailure: true }],
+    [{ stressArtifactMode: "timestamp" }, { stressArtifactMode: "timestamp" }],
+  ])("accepts config overrides %j", async (configValue, expected) => {
+    const directory = await createTempDir("exvex-config-table-valid-");
+
+    await writeFile(
+      join(directory, "exvex.config.json"),
+      JSON.stringify(configValue, null, 2),
+    );
+
+    await expect(loadConfig(directory)).resolves.toMatchObject(expected);
+  });
+
+  it.each([
+    [{ timeout: "fast" }, 'Invalid config: "timeout" must be a non-negative integer.'],
+    [{ javascript: "" }, 'Invalid config: "javascript" must be a non-empty string.'],
+    [{ retainTempArtifactsOnSuccess: "yes" }, 'Invalid config: "retainTempArtifactsOnSuccess" must be a boolean.'],
+    [{ retainTempArtifactsOnFailure: 1 }, 'Invalid config: "retainTempArtifactsOnFailure" must be a boolean.'],
+    [{ stressArtifactMode: "keep-all" }, 'Invalid config: "stressArtifactMode" must be "overwrite" or "timestamp".'],
+    [{ timeot: 1234 }, 'Invalid config: unknown key "timeot".'],
+  ])("rejects invalid config overrides %j", async (configValue, message) => {
+    const directory = await createTempDir("exvex-config-table-invalid-");
+
+    await writeFile(
+      join(directory, "exvex.config.json"),
+      JSON.stringify(configValue, null, 2),
+    );
+
+    await expect(loadConfig(directory)).rejects.toThrow(message);
   });
 });
 
@@ -335,6 +384,19 @@ describe("resolveEntryFile", () => {
     await expect(detectLanguageForFile(entryPath)).resolves.toBe("javascript");
   });
 
+  it("detects extensionless CommonJS files that only use bare require calls", async () => {
+    const directory = await createTempDir("exvex-entry-js-require-only-");
+    const entryPath = join(directory, "main");
+
+    await writeFile(
+      entryPath,
+      ['require("dotenv").config();', 'require("./bootstrap")();'].join("\n"),
+    );
+
+    await expect(detectLanguageForFile(entryPath)).resolves.toBe("javascript");
+    await expect(resolveEntryFile(directory, "main")).resolves.toBe(entryPath);
+  });
+
   it("still detects extensionless Ruby files using require", async () => {
     const directory = await createTempDir("exvex-entry-rb-require-");
     const entryPath = join(directory, "main");
@@ -376,6 +438,73 @@ describe("resolveEntryFile", () => {
     );
 
     await expect(detectLanguageForFile(entryPath)).resolves.toBe("javascript");
+  });
+
+  it("detects extensionless C files that use non-stdio C headers", async () => {
+    const directory = await createTempDir("exvex-entry-c-header-only-");
+    const entryPath = join(directory, "main");
+
+    await writeFile(
+      entryPath,
+      [
+        "#include <string.h>",
+        "",
+        "int main(void) {",
+        '  return strcmp("a", "a");',
+        "}",
+      ].join("\n"),
+    );
+
+    await expect(detectLanguageForFile(entryPath)).resolves.toBe("c");
+  });
+
+  it.each(["stddef.h", "errno.h", "signal.h"])(
+    "detects extensionless C files that use %s",
+    async (headerName) => {
+      const directory = await createTempDir("exvex-entry-c-extra-header-");
+      const entryPath = join(directory, "main");
+
+      await writeFile(
+        entryPath,
+        [
+          `#include <${headerName}>`,
+          "",
+          "int main(void) {",
+          "  return 0;",
+          "}",
+        ].join("\n"),
+      );
+
+      await expect(detectLanguageForFile(entryPath)).resolves.toBe("c");
+    },
+  );
+
+  it("detects extensionless Node scripts that only use process.stdin event handlers", async () => {
+    const directory = await createTempDir("exvex-entry-js-stdin-on-");
+    const entryPath = join(directory, "main");
+
+    await writeFile(
+      entryPath,
+      [
+        "let data = '';",
+        "process.stdin.on('data', (chunk) => { data += chunk; });",
+        "process.stdin.on('end', () => { console.log(data.length); });",
+      ].join("\n"),
+    );
+
+    await expect(detectLanguageForFile(entryPath)).resolves.toBe("javascript");
+  });
+
+  it("detects extensionless Ruby files that use require_relative", async () => {
+    const directory = await createTempDir("exvex-entry-rb-require-relative-");
+    const entryPath = join(directory, "main");
+
+    await writeFile(
+      entryPath,
+      ['require_relative "helper"', "puts helper_message"].join("\n"),
+    );
+
+    await expect(detectLanguageForFile(entryPath)).resolves.toBe("ruby");
   });
 });
 
@@ -571,6 +700,41 @@ describe("runFile", () => {
     ).rejects.toThrow("timeoutMs must be a non-negative integer.");
   });
 
+  it.each([
+    [
+      "javascript runtime",
+      "main.js",
+      "console.log('ok');\n",
+      { javascript: 'node "' },
+    ],
+    [
+      "c++ compiler",
+      "main.cpp",
+      '#include <iostream>\nint main() { std::cout << "ok\\n"; return 0; }\n',
+      { cpp: 'g++ "' },
+    ],
+  ])(
+    "rejects malformed %s commands from config",
+    async (_label, entryFile, source, configValue) => {
+      const directory = await createTempDir("exvex-malformed-command-");
+
+      await writeFile(join(directory, entryFile), source);
+      await writeFile(
+        join(directory, "exvex.config.json"),
+        JSON.stringify(configValue, null, 2),
+      );
+
+      await expect(
+        runFile({
+          cwd: directory,
+          entryFile,
+          timeoutMs: 1000,
+          useCache: false,
+        }),
+      ).rejects.toThrow('Invalid command: unmatched " quote.');
+    },
+  );
+
   it(
     "includes an extensionless Go file in compilation sources rather than throwing 'No go sources found'",
     async () => {
@@ -646,6 +810,142 @@ it(
   },
   45000,
 );
+
+  it(
+    "retains temporary artifacts after a successful --no-cache run when configured",
+    async () => {
+      const directory = await createTempDir("exvex-runfile-retain-success-");
+
+      await writeFile(
+        join(directory, "main.cpp"),
+        '#include <iostream>\nint main() { std::cout << "ok\\n"; return 0; }\n',
+      );
+      await writeFile(
+        join(directory, "exvex.config.json"),
+        JSON.stringify({ retainTempArtifactsOnSuccess: true }, null, 2),
+      );
+
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        useCache: false,
+        timeoutMs: 30000,
+      });
+
+      expect(result.exitCode).toBe(0);
+      await expect(stat(result.artifactPath ?? "")).resolves.toBeDefined();
+    },
+    45000,
+  );
+
+  it(
+    "retains temporary artifacts after a compile failure when configured",
+    async () => {
+      const directory = await createTempDir("exvex-runfile-retain-compile-fail-");
+      const beforeEntries = new Set(
+        (await readdir(tmpdir())).filter((name) => name.startsWith("exvex-native-")),
+      );
+
+      await writeFile(
+        join(directory, "main.cpp"),
+        '#include <iostream>\nint main( { return 0; }\n',
+      );
+      await writeFile(
+        join(directory, "exvex.config.json"),
+        JSON.stringify({ retainTempArtifactsOnFailure: true }, null, 2),
+      );
+
+      await expect(
+        runFile({
+          cwd: directory,
+          entryFile: "main.cpp",
+          useCache: false,
+          timeoutMs: 30000,
+        }),
+      ).rejects.toThrow();
+
+      const afterEntries = (await readdir(tmpdir())).filter(
+        (name) =>
+          name.startsWith("exvex-native-") && !beforeEntries.has(name),
+      );
+      expect(afterEntries.length).toBeGreaterThan(0);
+    },
+    45000,
+  );
+
+  it(
+    "retains temporary artifacts after a runtime failure when configured",
+    async () => {
+      const directory = await createTempDir("exvex-runfile-retain-runtime-fail-");
+
+      await writeFile(
+        join(directory, "main.cpp"),
+        '#include <iostream>\nint main() { std::cerr << "boom\\n"; return 7; }\n',
+      );
+      await writeFile(
+        join(directory, "exvex.config.json"),
+        JSON.stringify({ retainTempArtifactsOnFailure: true }, null, 2),
+      );
+
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        useCache: false,
+        timeoutMs: 30000,
+      });
+
+      expect(result.exitCode).toBe(7);
+      await expect(stat(result.artifactPath ?? "")).resolves.toBeDefined();
+    },
+    45000,
+  );
+
+  it(
+    "reuses cached artifacts instead of recompiling every run",
+    async () => {
+      const directory = await createTempDir("exvex-cache-hit-");
+      const entryPath = join(directory, "main.cpp");
+      const compilerLogPath = join(directory, "compiler.log");
+      const compilerWrapperPath = join(directory, "fake-gpp");
+
+      await writeFile(
+        entryPath,
+        '#include <iostream>\nint main() { std::cout << "cache-hit\\n"; return 0; }\n',
+      );
+      await writeFile(
+        compilerWrapperPath,
+        [
+          "#!/bin/sh",
+          `printf 'compile\\n' >> ${JSON.stringify(compilerLogPath)}`,
+          'exec g++ "$@"',
+        ].join("\n"),
+      );
+      execFileSync("chmod", ["+x", compilerWrapperPath]);
+      await writeFile(
+        join(directory, "exvex.config.json"),
+        JSON.stringify({ cpp: compilerWrapperPath }, null, 2),
+      );
+
+      const firstResult = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        useCache: true,
+        timeoutMs: 30000,
+      });
+
+      const secondResult = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        useCache: true,
+        timeoutMs: 30000,
+      });
+
+      expect(firstResult.stdout).toContain("cache-hit");
+      expect(secondResult.stdout).toContain("cache-hit");
+      await expect(readFile(compilerLogPath, "utf8")).resolves.toBe("compile\n");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 
   it(
     "invalidates the compile cache when source contents change with preserved timestamps",
@@ -1384,11 +1684,60 @@ describe("runStress", () => {
     expect(summary.failureReason).toBe("mismatch");
     expect(summary.failingIteration).toBe(1);
     expect(summary.artifactDir).toBe(join(directory, ".exvex", "stress"));
+    expect(summary.artifactMetadataPath).toBe(
+      join(directory, ".exvex", "stress", "metadata.json"),
+    );
     await expect(
       readFile(
         join(directory, ".exvex", "stress", "failing-input.txt"),
         "utf8",
       ),
     ).resolves.toBe("1\n");
+    await expect(
+      readFile(
+        join(directory, ".exvex", "stress", "metadata.json"),
+        "utf8",
+      ),
+    ).resolves.toContain('"failureReason": "mismatch"');
+  });
+
+  it("can preserve stress artifacts in timestamped directories", async () => {
+    const directory = await createTempDir("exvex-stress-keep-");
+
+    await writeFile(
+      join(directory, "solution.js"),
+      "console.log('1')\n",
+    );
+    await writeFile(
+      join(directory, "brute.js"),
+      "console.log('2')\n",
+    );
+    await writeFile(join(directory, "gen.js"), "console.log('1');\n");
+    await writeFile(
+      join(directory, "exvex.config.json"),
+      JSON.stringify({ stressArtifactMode: "timestamp" }, null, 2),
+    );
+
+    const first = await runStress({
+      cwd: directory,
+      solutionFile: "solution.js",
+      bruteFile: "brute.js",
+      generatorFile: "gen.js",
+      iterations: 1,
+      timeoutMs: 2000,
+    });
+
+    const second = await runStress({
+      cwd: directory,
+      solutionFile: "solution.js",
+      bruteFile: "brute.js",
+      generatorFile: "gen.js",
+      iterations: 1,
+      timeoutMs: 2000,
+    });
+
+    expect(first.artifactDir).not.toBe(second.artifactDir);
+    expect(first.artifactDir).toContain(`${join(directory, ".exvex", "stress")}`);
+    expect(second.artifactMetadataPath).toContain("metadata.json");
   });
 });

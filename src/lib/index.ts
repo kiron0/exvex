@@ -72,6 +72,22 @@ interface PreparedExecution {
   cleanupPath?: string;
 }
 
+interface StressArtifactMetadata {
+  failureReason:
+    | "mismatch"
+    | "generator-error"
+    | "solution-error"
+    | "brute-error"
+    | "timeout";
+  failingIteration: number;
+  message: string;
+}
+
+function createStressArtifactDirectoryName(iteration: number) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return `${timestamp}-iter-${String(iteration).padStart(4, "0")}`;
+}
+
 interface DetectedSourceFile {
   name: string;
   path: string;
@@ -247,6 +263,15 @@ function detectLanguageFromContent(content: string): SupportedLanguage | null {
   }
 
   if (
+    /^\s*#include\s*<(?:stdlib|string|stdint|stdbool|stddef|errno|signal|math|ctype|time|limits|assert)\.h>/m.test(
+      content,
+    ) &&
+    /\bint\s+main\s*\(/.test(content)
+  ) {
+    return "c";
+  }
+
+  if (
     /__name__\s*==\s*["']__main__["']/.test(content) ||
     /^\s*from\s+[A-Za-z_][\w.]*\s+import\s+/m.test(content) ||
     /^\s*def\s+\w+\s*\([^)]*\)\s*:/m.test(content) ||
@@ -257,6 +282,7 @@ function detectLanguageFromContent(content: string): SupportedLanguage | null {
 
   if (
     /^\s*import\s+(?:[\w*\s{},]*\s+from\s+)?["'][^"']+["'];?/m.test(content) ||
+    /^\s*require\s*\(\s*["'][^"']+["']\s*\)\s*;?/m.test(content) ||
     /^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|\{)/m.test(
       content,
     ) ||
@@ -269,7 +295,7 @@ function detectLanguageFromContent(content: string): SupportedLanguage | null {
   }
 
   if (
-    /^\s*(puts|require|load)\b/m.test(content) &&
+    /^\s*(puts|require|require_relative|load)\b/m.test(content) &&
     !trimmed.startsWith("<?") &&
     !/^\s*require\s*\(/.test(content)
   ) {
@@ -668,6 +694,18 @@ async function getCacheBaseDir(cwd: string, config: ResolvedExvexConfig) {
   return cacheBaseDir;
 }
 
+async function cleanupTempArtifacts(
+  artifactDir: string,
+  useCache: boolean,
+  retainArtifacts: boolean,
+) {
+  if (useCache || retainArtifacts) {
+    return;
+  }
+
+  await rm(artifactDir, { recursive: true, force: true });
+}
+
 async function prepareNativeExecution({
   entryPath,
   language,
@@ -756,6 +794,11 @@ async function prepareNativeExecution({
     }
 
     if (compileResult.timedOut || compileResult.exitCode !== 0) {
+      await cleanupTempArtifacts(
+        artifactDir,
+        useCache,
+        config.retainTempArtifactsOnFailure,
+      );
       throw new Error(
         getProcessFailureMessage(
           `Compilation (${language})`,
@@ -842,6 +885,11 @@ async function prepareKotlinExecution({
     });
 
     if (compileResult.timedOut || compileResult.exitCode !== 0) {
+      await cleanupTempArtifacts(
+        artifactDir,
+        useCache,
+        config.retainTempArtifactsOnFailure,
+      );
       throw new Error(
         getProcessFailureMessage(
           "Compilation (kotlin)",
@@ -936,6 +984,11 @@ async function prepareJavaExecution({
     });
 
     if (compileResult.timedOut || compileResult.exitCode !== 0) {
+      await cleanupTempArtifacts(
+        artifactDir,
+        useCache,
+        config.retainTempArtifactsOnFailure,
+      );
       throw new Error(
         getProcessFailureMessage(
           "Compilation (java)",
@@ -1227,6 +1280,7 @@ export async function runFile(request: RunRequest): Promise<RunResult> {
     timeoutMs,
     useCache,
   });
+  let runtimeResult: ProcessRunResult | undefined;
   try {
     let inputText: string | undefined = request.inputText;
 
@@ -1235,7 +1289,7 @@ export async function runFile(request: RunRequest): Promise<RunResult> {
       await ensureFileExists(resolvedInputFile, "Input file");
       inputText = await readFile(resolvedInputFile, "utf8");
     }
-    const runtimeResult = await runProcess({
+    runtimeResult = await runProcess({
       command: execution.command[0],
       args: execution.command.slice(1),
       cwd,
@@ -1260,7 +1314,12 @@ export async function runFile(request: RunRequest): Promise<RunResult> {
     };
   } finally {
     if (execution.cleanupPath) {
-      await rm(execution.cleanupPath, { recursive: true, force: true });
+      const retainArtifacts = runtimeResult
+        ? runtimeResult.timedOut || runtimeResult.exitCode !== 0
+          ? config.retainTempArtifactsOnFailure
+          : config.retainTempArtifactsOnSuccess
+        : config.retainTempArtifactsOnFailure;
+      await cleanupTempArtifacts(execution.cleanupPath, useCache, retainArtifacts);
     }
   }
 }
@@ -1419,28 +1478,44 @@ export async function writeStressArtifacts({
   inputText,
   solutionOutput,
   bruteOutput,
+  metadata,
+  artifactMode = "overwrite",
 }: {
   cwd: string;
   inputText: string;
   solutionOutput: string;
   bruteOutput: string;
+  metadata?: StressArtifactMetadata;
+  artifactMode?: "overwrite" | "timestamp";
 }) {
-  const artifactDir = resolve(cwd, ".exvex/stress");
+  const artifactDir =
+    artifactMode === "timestamp" && metadata
+      ? resolve(
+          cwd,
+          ".exvex/stress",
+          createStressArtifactDirectoryName(metadata.failingIteration),
+        )
+      : resolve(cwd, ".exvex/stress");
   await mkdir(artifactDir, { recursive: true });
 
   const failingInputPath = join(artifactDir, "failing-input.txt");
   const solutionOutputPath = join(artifactDir, "solution-output.txt");
   const bruteOutputPath = join(artifactDir, "brute-output.txt");
+  const artifactMetadataPath = join(artifactDir, "metadata.json");
 
   await writeFile(failingInputPath, inputText);
   await writeFile(solutionOutputPath, solutionOutput);
   await writeFile(bruteOutputPath, bruteOutput);
+  if (metadata) {
+    await writeFile(artifactMetadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
+  }
 
   return {
     artifactDir,
     failingInputPath,
     solutionOutputPath,
     bruteOutputPath,
+    artifactMetadataPath,
   };
 }
 
@@ -1467,11 +1542,18 @@ export async function runStress(
     });
 
     if (generatorResult.timedOut) {
+      const message = `Generator timed out after ${timeoutMs}ms.`;
       const artifacts = await writeStressArtifacts({
         cwd,
         inputText: generatorResult.stdout,
         solutionOutput: "",
         bruteOutput: "",
+        artifactMode: config.stressArtifactMode,
+        metadata: {
+          failureReason: "timeout",
+          failingIteration: iteration,
+          message,
+        },
       });
 
       return {
@@ -1480,18 +1562,26 @@ export async function runStress(
         success: false,
         failureReason: "timeout",
         failingIteration: iteration,
-        message: `Generator timed out after ${timeoutMs}ms.`,
+        message,
         artifactDir: artifacts.artifactDir,
+        artifactMetadataPath: artifacts.artifactMetadataPath,
         generatorResult,
       };
     }
 
     if (generatorResult.exitCode !== 0) {
+      const message = `Generator exited with code ${generatorResult.exitCode}.`;
       const artifacts = await writeStressArtifacts({
         cwd,
         inputText: generatorResult.stdout,
         solutionOutput: "",
         bruteOutput: "",
+        artifactMode: config.stressArtifactMode,
+        metadata: {
+          failureReason: "generator-error",
+          failingIteration: iteration,
+          message,
+        },
       });
 
       return {
@@ -1500,8 +1590,9 @@ export async function runStress(
         success: false,
         failureReason: "generator-error",
         failingIteration: iteration,
-        message: `Generator exited with code ${generatorResult.exitCode}.`,
+        message,
         artifactDir: artifacts.artifactDir,
+        artifactMetadataPath: artifacts.artifactMetadataPath,
         generatorResult,
       };
     }
@@ -1523,11 +1614,23 @@ export async function runStress(
     });
 
     if (solutionResult.timedOut || bruteResult.timedOut) {
+      const message =
+        solutionResult.timedOut && bruteResult.timedOut
+          ? `Solution and brute-force programs timed out after ${timeoutMs}ms.`
+          : solutionResult.timedOut
+            ? `Solution timed out after ${timeoutMs}ms.`
+            : `Brute-force program timed out after ${timeoutMs}ms.`;
       const artifacts = await writeStressArtifacts({
         cwd,
         inputText,
         solutionOutput: solutionResult.stdout,
         bruteOutput: bruteResult.stdout,
+        artifactMode: config.stressArtifactMode,
+        metadata: {
+          failureReason: "timeout",
+          failingIteration: iteration,
+          message,
+        },
       });
 
       return {
@@ -1536,13 +1639,9 @@ export async function runStress(
         success: false,
         failureReason: "timeout",
         failingIteration: iteration,
-        message:
-          solutionResult.timedOut && bruteResult.timedOut
-            ? `Solution and brute-force programs timed out after ${timeoutMs}ms.`
-            : solutionResult.timedOut
-              ? `Solution timed out after ${timeoutMs}ms.`
-              : `Brute-force program timed out after ${timeoutMs}ms.`,
+        message,
         artifactDir: artifacts.artifactDir,
+        artifactMetadataPath: artifacts.artifactMetadataPath,
         generatorResult,
         solutionResult,
         bruteResult,
@@ -1550,11 +1649,18 @@ export async function runStress(
     }
 
     if (solutionResult.exitCode !== 0) {
+      const message = `Solution exited with code ${solutionResult.exitCode}.`;
       const artifacts = await writeStressArtifacts({
         cwd,
         inputText,
         solutionOutput: solutionResult.stdout,
         bruteOutput: bruteResult.stdout,
+        artifactMode: config.stressArtifactMode,
+        metadata: {
+          failureReason: "solution-error",
+          failingIteration: iteration,
+          message,
+        },
       });
 
       return {
@@ -1563,8 +1669,9 @@ export async function runStress(
         success: false,
         failureReason: "solution-error",
         failingIteration: iteration,
-        message: `Solution exited with code ${solutionResult.exitCode}.`,
+        message,
         artifactDir: artifacts.artifactDir,
+        artifactMetadataPath: artifacts.artifactMetadataPath,
         generatorResult,
         solutionResult,
         bruteResult,
@@ -1572,11 +1679,18 @@ export async function runStress(
     }
 
     if (bruteResult.exitCode !== 0) {
+      const message = `Brute-force program exited with code ${bruteResult.exitCode}.`;
       const artifacts = await writeStressArtifacts({
         cwd,
         inputText,
         solutionOutput: solutionResult.stdout,
         bruteOutput: bruteResult.stdout,
+        artifactMode: config.stressArtifactMode,
+        metadata: {
+          failureReason: "brute-error",
+          failingIteration: iteration,
+          message,
+        },
       });
 
       return {
@@ -1585,8 +1699,9 @@ export async function runStress(
         success: false,
         failureReason: "brute-error",
         failingIteration: iteration,
-        message: `Brute-force program exited with code ${bruteResult.exitCode}.`,
+        message,
         artifactDir: artifacts.artifactDir,
+        artifactMetadataPath: artifacts.artifactMetadataPath,
         generatorResult,
         solutionResult,
         bruteResult,
@@ -1597,11 +1712,21 @@ export async function runStress(
       normalizeOutput(solutionResult.stdout) !==
       normalizeOutput(bruteResult.stdout)
     ) {
+      const message = describeFirstDifference(
+        bruteResult.stdout,
+        solutionResult.stdout,
+      );
       const artifacts = await writeStressArtifacts({
         cwd,
         inputText,
         solutionOutput: solutionResult.stdout,
         bruteOutput: bruteResult.stdout,
+        artifactMode: config.stressArtifactMode,
+        metadata: {
+          failureReason: "mismatch",
+          failingIteration: iteration,
+          message,
+        },
       });
 
       return {
@@ -1610,11 +1735,9 @@ export async function runStress(
         success: false,
         failureReason: "mismatch",
         failingIteration: iteration,
-        message: describeFirstDifference(
-          bruteResult.stdout,
-          solutionResult.stdout,
-        ),
+        message,
         artifactDir: artifacts.artifactDir,
+        artifactMetadataPath: artifacts.artifactMetadataPath,
         generatorResult,
         solutionResult,
         bruteResult,

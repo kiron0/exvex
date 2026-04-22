@@ -26,6 +26,9 @@ export const DEFAULT_CONFIG: ResolvedExvexConfig = {
   cacheDir: ".exvex/cache",
   inputDir: "input",
   outputDir: "output",
+  retainTempArtifactsOnSuccess: false,
+  retainTempArtifactsOnFailure: false,
+  stressArtifactMode: "overwrite",
 };
 
 export const LANGUAGE_EXTENSIONS: Record<string, SupportedLanguage> = {
@@ -60,6 +63,28 @@ export const MAIN_FILE_NAMES = [
   "main.rb",
 ];
 
+const RESOLVED_CONFIG_KEYS = new Set<keyof ResolvedExvexConfig>([
+  "c",
+  "cpp",
+  "python",
+  "javaCompiler",
+  "javaRuntime",
+  "javascript",
+  "go",
+  "rust",
+  "kotlinCompiler",
+  "kotlinRuntime",
+  "php",
+  "ruby",
+  "timeout",
+  "cacheDir",
+  "inputDir",
+  "outputDir",
+  "retainTempArtifactsOnSuccess",
+  "retainTempArtifactsOnFailure",
+  "stressArtifactMode",
+]);
+
 function assertNonEmptyString(value: unknown, key: keyof ResolvedExvexConfig) {
   if (value === undefined) {
     return;
@@ -83,7 +108,38 @@ function assertNonNegativeInteger(
   }
 }
 
+function assertBoolean(value: unknown, key: keyof ResolvedExvexConfig) {
+  if (value === undefined) {
+    return;
+  }
+
+  if (typeof value !== "boolean") {
+    throw new Error(`Invalid config: "${key}" must be a boolean.`);
+  }
+}
+
+function assertStressArtifactMode(
+  value: unknown,
+  key: keyof ResolvedExvexConfig,
+) {
+  if (value === undefined) {
+    return;
+  }
+
+  if (value !== "overwrite" && value !== "timestamp") {
+    throw new Error(
+      `Invalid config: "${key}" must be "overwrite" or "timestamp".`,
+    );
+  }
+}
+
 export function resolveConfig(config: ExvexConfig = {}): ResolvedExvexConfig {
+  for (const key of Object.keys(config)) {
+    if (!RESOLVED_CONFIG_KEYS.has(key as keyof ResolvedExvexConfig)) {
+      throw new Error(`Invalid config: unknown key "${key}".`);
+    }
+  }
+
   assertNonEmptyString(config.c, "c");
   assertNonEmptyString(config.cpp, "cpp");
   assertNonEmptyString(config.python, "python");
@@ -100,6 +156,15 @@ export function resolveConfig(config: ExvexConfig = {}): ResolvedExvexConfig {
   assertNonEmptyString(config.inputDir, "inputDir");
   assertNonEmptyString(config.outputDir, "outputDir");
   assertNonNegativeInteger(config.timeout, "timeout");
+  assertBoolean(
+    config.retainTempArtifactsOnSuccess,
+    "retainTempArtifactsOnSuccess",
+  );
+  assertBoolean(
+    config.retainTempArtifactsOnFailure,
+    "retainTempArtifactsOnFailure",
+  );
+  assertStressArtifactMode(config.stressArtifactMode, "stressArtifactMode");
 
   return {
     ...DEFAULT_CONFIG,

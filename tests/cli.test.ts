@@ -159,6 +159,41 @@ describe("parseCliArgs", () => {
     });
   });
 
+  it("parses --json in run, test, and stress modes", () => {
+    expect(parseCliArgs(["main.js", "--json"])).toEqual({
+      help: false,
+      command: "run",
+      entryFile: "main.js",
+      inputFile: undefined,
+      timeoutMs: undefined,
+      useCache: true,
+      json: true,
+    });
+
+    expect(parseCliArgs(["test", "--json"])).toEqual({
+      help: false,
+      command: "test",
+      entryFile: undefined,
+      inputDir: undefined,
+      outputDir: undefined,
+      timeoutMs: undefined,
+      useCache: true,
+      json: true,
+    });
+
+    expect(parseCliArgs(["stress", "a.js", "b.js", "c.js", "--json"])).toEqual({
+      help: false,
+      command: "stress",
+      solutionFile: "a.js",
+      bruteFile: "b.js",
+      generatorFile: "c.js",
+      iterations: undefined,
+      timeoutMs: undefined,
+      useCache: true,
+      json: true,
+    });
+  });
+
   it("parses test mode options with an optional entry file", () => {
     expect(
       parseCliArgs([
@@ -383,6 +418,7 @@ describe("getHelpText", () => {
     expect(helpText).toContain("exvex.config.json");
     expect(helpText).toContain("use 0 to disable timeout");
     expect(helpText).toContain(".exvex/cache");
+    expect(helpText).toContain("--json");
     expect(helpText).toContain(".go");
     expect(helpText).toContain(".rb");
   });
@@ -432,6 +468,46 @@ describe("runCli", () => {
       }),
     );
     expect(dependencies.runJudge).not.toHaveBeenCalled();
+  });
+
+  it("routes interactive test mode args to judge mode", async () => {
+    const { dependencies } = createDependencies({
+      isTty: true,
+      promptForArgs: vi.fn(async () => ["test", "main.js", "--timeout=1000"]),
+    });
+
+    await expect(runCli([], dependencies)).resolves.toBe(0);
+
+    expect(dependencies.runJudge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entryFile: "main.js",
+        timeoutMs: 1000,
+      }),
+    );
+  });
+
+  it("routes interactive stress mode args to stress mode", async () => {
+    const { dependencies } = createDependencies({
+      isTty: true,
+      promptForArgs: vi.fn(async () => [
+        "stress",
+        "solution.js",
+        "brute.js",
+        "gen.js",
+        "--iterations=2",
+      ]),
+    });
+
+    await expect(runCli([], dependencies)).resolves.toBe(0);
+
+    expect(dependencies.runStress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        solutionFile: "solution.js",
+        bruteFile: "brute.js",
+        generatorFile: "gen.js",
+        iterations: 2,
+      }),
+    );
   });
 
   it("returns 0 cleanly when the user cancels the interactive prompt", async () => {
@@ -607,6 +683,132 @@ describe("runCli", () => {
     await expect(runCli(["main.js"], dependencies)).resolves.toBe(1);
 
     expect(logger.error).toHaveBeenCalledWith("Process exited with code 1.");
+  });
+
+  it("prints run results as JSON when --json is used", async () => {
+    const { dependencies, logger } = createDependencies({
+      runFile: vi.fn(async () => ({
+        entryFile: MAIN_FILE,
+        language: "javascript" as const,
+        command: ["node", MAIN_FILE],
+        exitCode: 0,
+        stdout: "json-ok\n",
+        stderr: "",
+        durationMs: 10,
+        timeoutMs: 2000,
+        timedOut: false,
+      })),
+    });
+
+    await expect(runCli(["main.js", "--json"], dependencies)).resolves.toBe(0);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"stdout": "json-ok\\n"'),
+    );
+  });
+
+  it("prints judge summaries as JSON when --json is used", async () => {
+    const { dependencies, logger } = createDependencies();
+
+    await expect(runCli(["test", "--json"], dependencies)).resolves.toBe(0);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"total": 2'),
+    );
+  });
+
+  it("prints stress summaries as JSON when --json is used", async () => {
+    const { dependencies, logger } = createDependencies();
+
+    await expect(
+      runCli(["stress", "solution.js", "brute.js", "gen.js", "--json"], dependencies),
+    ).resolves.toBe(0);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"success": true'),
+    );
+  });
+
+  it("prints parse errors as JSON when --json is used", async () => {
+    const { dependencies, logger } = createDependencies();
+
+    await expect(
+      runCli(["stress", "solution.js", "--json"], dependencies),
+    ).resolves.toBe(1);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"code": "ARG_PARSE_ERROR"'),
+    );
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("prints dependency errors as JSON when --json is used", async () => {
+    const { dependencies, logger } = createDependencies({
+      runFile: vi.fn(async () => {
+        throw new Error("boom");
+      }),
+    });
+
+    await expect(runCli(["main.js", "--json"], dependencies)).resolves.toBe(1);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"code": "CLI_ERROR"'),
+    );
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("prints config-load failures as JSON when --json is used", async () => {
+    const { dependencies, logger } = createDependencies({
+      runFile: vi.fn(async () => {
+        throw new Error('Failed to parse exvex.config.json: bad json');
+      }),
+    });
+
+    await expect(runCli(["main.js", "--json"], dependencies)).resolves.toBe(1);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"code": "CONFIG_ERROR"'),
+    );
+  });
+
+  it("prints missing-toolchain failures as JSON when --json is used", async () => {
+    const { dependencies, logger } = createDependencies({
+      runFile: vi.fn(async () => {
+        throw new Error(
+          'Required command not found on PATH: "nope". Install the toolchain or override it in exvex.config.json.',
+        );
+      }),
+    });
+
+    await expect(runCli(["main.js", "--json"], dependencies)).resolves.toBe(1);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"code": "COMMAND_NOT_FOUND"'),
+    );
+  });
+
+  it("keeps program stdout/stderr out of terminal streams in --json mode", async () => {
+    const { dependencies, stdout, stderr, logger } = createDependencies({
+      runFile: vi.fn(async () => ({
+        entryFile: MAIN_FILE,
+        language: "javascript" as const,
+        command: ["node", MAIN_FILE],
+        exitCode: 0,
+        stdout: "program-out\n",
+        stderr: "program-err\n",
+        durationMs: 10,
+        timeoutMs: 2000,
+        timedOut: false,
+      })),
+    });
+
+    await expect(runCli(["main.js", "--json"], dependencies)).resolves.toBe(0);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"stderr": "program-err\\n"'),
+    );
+    expect(stdout.read()).toBeNull();
+    expect(stderr.read()).toBeNull();
   });
 });
 
