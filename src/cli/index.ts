@@ -1472,7 +1472,42 @@ function wantsJsonOutput(args: string[]) {
   const endOfOptionsIndex = args.indexOf("--");
   const argsForJsonCheck =
     endOfOptionsIndex >= 0 ? args.slice(0, endOfOptionsIndex) : args;
-  return argsForJsonCheck.includes("--json");
+  return hasStandaloneTopLevelFlag(argsForJsonCheck, ["--json"]);
+}
+
+const SPACE_SEPARATED_VALUE_OPTIONS = new Set([
+  "--input",
+  "--timeout",
+  "--input-dir",
+  "--output-dir",
+  "--iterations",
+  "--preset",
+  "--entry",
+  "--solution",
+  "--brute",
+  "--generator",
+]);
+
+function hasStandaloneTopLevelFlag(
+  args: string[],
+  flags: string[],
+): boolean {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+
+    if (!flags.includes(arg)) {
+      continue;
+    }
+
+    const previousArg = args[index - 1];
+    if (previousArg && SPACE_SEPARATED_VALUE_OPTIONS.has(previousArg)) {
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
 }
 
 export function parseCliArgs(args: string[]): ParsedCliArgs {
@@ -1483,13 +1518,10 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   const endOfOptionsIndex = args.indexOf("--");
   const argsForFlagCheck =
     endOfOptionsIndex >= 0 ? args.slice(0, endOfOptionsIndex) : args;
-  if (argsForFlagCheck.includes("--help") || argsForFlagCheck.includes("-h")) {
+  if (hasStandaloneTopLevelFlag(argsForFlagCheck, ["--help", "-h"])) {
     return { help: true };
   }
-  if (
-    argsForFlagCheck.includes("--version") ||
-    argsForFlagCheck.includes("-v")
-  ) {
+  if (hasStandaloneTopLevelFlag(argsForFlagCheck, ["--version", "-v"])) {
     return { help: false, version: true };
   }
 

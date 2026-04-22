@@ -575,6 +575,38 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs(["main.js", "--help"])).toEqual({ help: true });
   });
 
+  it("does not treat help or version flags as global when consumed as option values", () => {
+    expect(parseCliArgs(["main.js", "--input", "--help"])).toEqual({
+      help: false,
+      command: "run",
+      entryFile: "main.js",
+      inputFile: "--help",
+      timeoutMs: undefined,
+      useCache: true,
+    });
+
+    expect(() => parseCliArgs(["main.js", "--timeout", "--version"])).toThrow(
+      "--timeout must be an integer.",
+    );
+    expect(parseCliArgs(["init", "cpp", "--entry", "--help"])).toEqual({
+      help: false,
+      command: "init",
+      language: "cpp",
+      preset: undefined,
+      force: false,
+      yes: false,
+      contest: false,
+      vscode: false,
+      gitignore: false,
+      inputDir: undefined,
+      outputDir: undefined,
+      entryFile: "--help",
+      solutionFile: undefined,
+      bruteFile: undefined,
+      generatorFile: undefined,
+    });
+  });
+
   it("runs a file named 'test' when entry is after --", () => {
     expect(parseCliArgs(["--", "test"])).toEqual({
       help: false,
@@ -1153,6 +1185,21 @@ describe("runCli", () => {
       expect.stringContaining('"code": "ARG_PARSE_ERROR"'),
     );
     expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("does not force JSON mode when --json is consumed as an option value", async () => {
+    const { dependencies, logger } = createDependencies();
+
+    await expect(
+      runCli(["test", "--input-dir", "--json"], dependencies),
+    ).resolves.toBe(1);
+
+    expect(logger.error).toHaveBeenCalledWith(
+      "Error: --input-dir must not be empty.",
+    );
+    expect(logger.log).not.toHaveBeenCalledWith(
+      expect.stringContaining('"success": false'),
+    );
   });
 
   it("prints init parse errors as JSON when --json is used", async () => {
