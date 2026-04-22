@@ -15,6 +15,13 @@ import { basename } from "path";
 import type { Readable, Writable } from "stream";
 import { fileURLToPath, pathToFileURL } from "url";
 import type { JudgeSummary, RunRequest, StressSummary } from "../interface";
+import {
+  INIT_LANGUAGES,
+  initProject,
+  type InitLanguage,
+  type InitPreset,
+  type InitSummary,
+} from "./init";
 import { formatDurationMs, runFile, runJudge, runStress } from "../lib";
 import { CONFIG_FILENAME } from "../utils";
 
@@ -55,6 +62,24 @@ type ParsedCliArgs =
       iterations?: number;
       timeoutMs?: number;
       useCache: boolean;
+    }
+  | {
+      help: false;
+      command: "init";
+      json?: boolean;
+      language?: InitLanguage;
+      preset?: InitPreset;
+      force: boolean;
+      yes: boolean;
+      contest: boolean;
+      vscode: boolean;
+      gitignore: boolean;
+      inputDir?: string;
+      outputDir?: string;
+      entryFile?: string;
+      solutionFile?: string;
+      bruteFile?: string;
+      generatorFile?: string;
     };
 
 export interface CliDependencies {
@@ -67,7 +92,9 @@ export interface CliDependencies {
   runFile: typeof runFile;
   runJudge: typeof runJudge;
   runStress: typeof runStress;
+  initProject: typeof initProject;
   promptForArgs?: () => Promise<string[] | null>;
+  promptForInitArgs?: () => Promise<string[] | null>;
 }
 
 const defaultCliDependencies: CliDependencies = {
@@ -80,7 +107,232 @@ const defaultCliDependencies: CliDependencies = {
   runFile,
   runJudge,
   runStress,
+  initProject,
 };
+
+function getDefaultInitEntryFile(language: InitLanguage) {
+  if (language === "java" || language === "kotlin") {
+    return `Main${language === "java" ? ".java" : ".kt"}`;
+  }
+
+  const extensions: Record<InitLanguage, string> = {
+    c: ".c",
+    cpp: ".cpp",
+    python: ".py",
+    java: ".java",
+    javascript: ".js",
+    go: ".go",
+    rust: ".rs",
+    kotlin: ".kt",
+    php: ".php",
+    ruby: ".rb",
+  };
+
+  return `main${extensions[language]}`;
+}
+
+function getDefaultInitStressFiles(language: InitLanguage) {
+  const extensionMap: Record<InitLanguage, string> = {
+    c: ".c",
+    cpp: ".cpp",
+    python: ".py",
+    java: ".java",
+    javascript: ".js",
+    go: ".go",
+    rust: ".rs",
+    kotlin: ".kt",
+    php: ".php",
+    ruby: ".rb",
+  };
+  const extension = extensionMap[language];
+
+  if (language === "java" || language === "kotlin") {
+    return {
+      solution: `Solution${extension}`,
+      brute: `Brute${extension}`,
+      generator: `Gen${extension}`,
+    };
+  }
+
+  return {
+    solution: `solution${extension}`,
+    brute: `brute${extension}`,
+    generator: `gen${extension}`,
+  };
+}
+
+async function promptForInitCommandArgs(): Promise<string[] | null> {
+  const jsonOutput = await confirm({
+    message: "Emit JSON output?",
+    initialValue: false,
+  });
+  if (isCancel(jsonOutput)) {
+    outro(CANCEL_MESSAGE);
+    return null;
+  }
+
+  const preset = await select({
+    message: "Preset",
+    initialValue: "test",
+    options: [
+      { value: "test", label: "Sample judge workspace", hint: "default" },
+      { value: "run", label: "Single-file run workspace" },
+      { value: "stress", label: "Stress-test workspace" },
+    ],
+  });
+
+  if (isCancel(preset)) {
+    outro(CANCEL_MESSAGE);
+    return null;
+  }
+
+  const language = await select({
+    message: "Language",
+    initialValue: "cpp",
+    options: INIT_LANGUAGES.map((value) => ({
+      value,
+      label: value,
+    })),
+  });
+
+  if (isCancel(language)) {
+    outro(CANCEL_MESSAGE);
+    return null;
+  }
+
+  const force = await confirm({
+    message: "Overwrite scaffold files if they already exist?",
+    initialValue: false,
+  });
+  if (isCancel(force)) {
+    outro(CANCEL_MESSAGE);
+    return null;
+  }
+
+  const contest = await confirm({
+    message: "Create contest folders a/, b/, c/?",
+    initialValue: false,
+  });
+  if (isCancel(contest)) {
+    outro(CANCEL_MESSAGE);
+    return null;
+  }
+
+  const vscode = await confirm({
+    message: "Generate .vscode/tasks.json?",
+    initialValue: false,
+  });
+  if (isCancel(vscode)) {
+    outro(CANCEL_MESSAGE);
+    return null;
+  }
+
+  const gitignore = await confirm({
+    message: 'Append ".exvex/" to .gitignore?',
+    initialValue: false,
+  });
+  if (isCancel(gitignore)) {
+    outro(CANCEL_MESSAGE);
+    return null;
+  }
+
+  if (preset === "stress") {
+    const defaults = getDefaultInitStressFiles(language);
+
+    const solution = await text({
+      message: "Solution file",
+      initialValue: defaults.solution,
+      validate: (value) => (!value ? "Required." : undefined),
+    });
+    if (isCancel(solution)) {
+      outro(CANCEL_MESSAGE);
+      return null;
+    }
+
+    const brute = await text({
+      message: "Brute-force file",
+      initialValue: defaults.brute,
+      validate: (value) => (!value ? "Required." : undefined),
+    });
+    if (isCancel(brute)) {
+      outro(CANCEL_MESSAGE);
+      return null;
+    }
+
+    const generator = await text({
+      message: "Generator file",
+      initialValue: defaults.generator,
+      validate: (value) => (!value ? "Required." : undefined),
+    });
+    if (isCancel(generator)) {
+      outro(CANCEL_MESSAGE);
+      return null;
+    }
+
+    return [
+      "init",
+      ...(jsonOutput ? ["--json"] : []),
+      language,
+      "--preset=stress",
+      ...(force ? ["--force"] : []),
+      ...(contest ? ["--contest"] : []),
+      ...(vscode ? ["--vscode"] : []),
+      ...(gitignore ? ["--gitignore"] : []),
+      `--solution=${solution}`,
+      `--brute=${brute}`,
+      `--generator=${generator}`,
+    ];
+  }
+
+  const entryFile = await text({
+    message: "Entry file",
+    initialValue: getDefaultInitEntryFile(language),
+    validate: (value) => (!value ? "Required." : undefined),
+  });
+  if (isCancel(entryFile)) {
+    outro(CANCEL_MESSAGE);
+    return null;
+  }
+
+  let inputDir: string | undefined;
+  let outputDir: string | undefined;
+
+  if (preset === "test") {
+    inputDir = await text({
+      message: "Input directory",
+      initialValue: "input",
+      validate: (value) => (!value ? "Required." : undefined),
+    });
+    if (isCancel(inputDir)) {
+      outro(CANCEL_MESSAGE);
+      return null;
+    }
+
+    outputDir = await text({
+      message: "Output directory",
+      initialValue: "output",
+      validate: (value) => (!value ? "Required." : undefined),
+    });
+    if (isCancel(outputDir)) {
+      outro(CANCEL_MESSAGE);
+      return null;
+    }
+  }
+
+  return [
+    "init",
+    ...(jsonOutput ? ["--json"] : []),
+    language,
+    `--preset=${preset}`,
+    ...(force ? ["--force"] : []),
+    ...(contest ? ["--contest"] : []),
+    ...(vscode ? ["--vscode"] : []),
+    ...(gitignore ? ["--gitignore"] : []),
+    ...(inputDir ? [`--input-dir=${inputDir}`] : []),
+    ...(outputDir ? [`--output-dir=${outputDir}`] : []),
+    `--entry=${entryFile}`,
+  ];
+}
 
 /** Returns the collected CLI args, or `null` if the user cancelled. */
 async function promptForInteractiveArgs(): Promise<string[] | null> {
@@ -101,6 +353,11 @@ async function promptForInteractiveArgs(): Promise<string[] | null> {
         label: "Stress test against brute-force",
         hint: "exvex stress <solution> <brute> <generator>",
       },
+      {
+        value: "init",
+        label: "Initialize workspace",
+        hint: "exvex init",
+      },
       { value: "help", label: "Show help" },
       { value: "exit", label: "Exit" },
     ],
@@ -113,6 +370,10 @@ async function promptForInteractiveArgs(): Promise<string[] | null> {
 
   if (mode === "help") {
     return [];
+  }
+
+  if (mode === "init") {
+    return await promptForInitCommandArgs();
   }
 
   const validateInteger =
@@ -670,28 +931,250 @@ function parseStressArgs(args: string[]): ParsedCliArgs {
   };
 }
 
+function parsePresetValue(value: string): InitPreset {
+  if (value === "run" || value === "test" || value === "stress") {
+    return value;
+  }
+
+  throw new Error(`Invalid init preset: "${value}".`);
+}
+
+function parseInitLanguage(value: string): InitLanguage {
+  if (INIT_LANGUAGES.includes(value as InitLanguage)) {
+    return value as InitLanguage;
+  }
+
+  throw new Error(`Unsupported init language: "${value}".`);
+}
+
+function parseInitArgs(args: string[]): ParsedCliArgs {
+  let language: InitLanguage | undefined;
+  let preset: InitPreset | undefined;
+  let force = false;
+  let yes = false;
+  let json = false;
+  let contest = false;
+  let vscode = false;
+  let gitignore = false;
+  let inputDir: string | undefined;
+  let outputDir: string | undefined;
+  let entryFile: string | undefined;
+  let solutionFile: string | undefined;
+  let bruteFile: string | undefined;
+  let generatorFile: string | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+
+    if (arg === "--") {
+      const remaining = args.slice(index + 1);
+
+      if (remaining.length > 1) {
+        throw new Error(`Unexpected argument: ${remaining[1]}`);
+      }
+
+      if (remaining.length === 1) {
+        if (language) {
+          throw new Error(`Unexpected argument: ${remaining[0]}`);
+        }
+
+        language = parseInitLanguage(remaining[0]!);
+      }
+
+      break;
+    }
+
+    if (arg === "--force") {
+      force = true;
+      continue;
+    }
+
+    if (arg === "--yes") {
+      yes = true;
+      continue;
+    }
+
+    if (arg === "--json") {
+      json = true;
+      continue;
+    }
+
+    if (arg === "--contest") {
+      contest = true;
+      continue;
+    }
+
+    if (arg === "--vscode") {
+      vscode = true;
+      continue;
+    }
+
+    if (arg === "--gitignore") {
+      gitignore = true;
+      continue;
+    }
+
+    if (arg === "--run") {
+      preset = "run";
+      continue;
+    }
+
+    if (arg === "--test") {
+      preset = "test";
+      continue;
+    }
+
+    if (arg === "--stress") {
+      preset = "stress";
+      continue;
+    }
+
+    const presetOption = parseOptionValue(args, index, "--preset");
+    if (presetOption) {
+      preset = parsePresetValue(presetOption.value);
+      index = presetOption.nextIndex;
+      continue;
+    }
+
+    const entryOption = parseOptionValue(args, index, "--entry");
+    if (entryOption) {
+      entryFile = entryOption.value;
+      index = entryOption.nextIndex;
+      continue;
+    }
+
+    const inputDirOption = parseOptionValue(args, index, "--input-dir");
+    if (inputDirOption) {
+      inputDir = inputDirOption.value;
+      index = inputDirOption.nextIndex;
+      continue;
+    }
+
+    const outputDirOption = parseOptionValue(args, index, "--output-dir");
+    if (outputDirOption) {
+      outputDir = outputDirOption.value;
+      index = outputDirOption.nextIndex;
+      continue;
+    }
+
+    const solutionOption = parseOptionValue(args, index, "--solution");
+    if (solutionOption) {
+      solutionFile = solutionOption.value;
+      index = solutionOption.nextIndex;
+      continue;
+    }
+
+    const bruteOption = parseOptionValue(args, index, "--brute");
+    if (bruteOption) {
+      bruteFile = bruteOption.value;
+      index = bruteOption.nextIndex;
+      continue;
+    }
+
+    const generatorOption = parseOptionValue(args, index, "--generator");
+    if (generatorOption) {
+      generatorFile = generatorOption.value;
+      index = generatorOption.nextIndex;
+      continue;
+    }
+
+    if (arg.startsWith("-")) {
+      throw new Error(`Unknown option: ${arg}`);
+    }
+
+    if (!language) {
+      language = parseInitLanguage(arg);
+      continue;
+    }
+
+    throw new Error(`Unexpected argument: ${arg}`);
+  }
+
+  const resolvedPreset = preset;
+
+  if (resolvedPreset === "stress" && entryFile) {
+    throw new Error("--entry cannot be used with stress init.");
+  }
+
+  if (resolvedPreset === "stress" && (inputDir || outputDir)) {
+    throw new Error("--input-dir and --output-dir cannot be used with stress init.");
+  }
+
+  if (
+    resolvedPreset !== "stress" &&
+    (solutionFile || bruteFile || generatorFile)
+  ) {
+    throw new Error(
+      "--solution, --brute, and --generator require --preset=stress.",
+    );
+  }
+
+  if (
+    resolvedPreset === "stress" &&
+    [solutionFile, bruteFile, generatorFile].some((value) => value === undefined) &&
+    [solutionFile, bruteFile, generatorFile].some((value) => value !== undefined)
+  ) {
+    throw new Error(
+      "Stress init requires --solution, --brute, and --generator together when any of them is provided.",
+    );
+  }
+
+  return {
+    help: false,
+    command: "init",
+    language,
+    preset: resolvedPreset,
+    force,
+    yes,
+    contest,
+    vscode,
+    gitignore,
+    ...(json ? { json: true } : {}),
+    inputDir,
+    outputDir,
+    entryFile,
+    solutionFile,
+    bruteFile,
+    generatorFile,
+  };
+}
+
 export function getHelpText() {
   return `
 Usage:
   exvex <entry> [--input=FILE] [--timeout=MS] [--no-cache]
   exvex test [entry] [--input-dir=DIR] [--output-dir=DIR] [--timeout=MS] [--no-cache]
   exvex stress <solution> <brute> <generator> [--iterations=N] [--timeout=MS] [--no-cache]
+  exvex init [language] [--preset=run|test|stress] [--contest] [--vscode] [--gitignore] [--yes] [--force]
   exvex --help
 
 Commands:
   <entry>          Run a supported source file directly
   test             Run sample tests from input/output directories
   stress           Compare a solution against a brute-force implementation
+  init             Scaffold a ready-to-use workspace
 
 Options:
   --input=FILE     Feed input from a file in run mode (also: --input FILE)
   --input-dir=DIR  Input directory for judge mode (also: --input-dir DIR)
   --output-dir=DIR Output directory for judge mode (also: --output-dir DIR)
   --iterations=N   Number of stress iterations (default: 100; also: --iterations N)
+  --preset=NAME    Init preset: run, test, or stress
   --json           Print machine-readable JSON summaries for run, test, or stress mode
   --timeout=MS     Override execution timeout in milliseconds; use 0 to disable timeout
+  --entry=FILE     Entry filename for init run/test presets
+  --input-dir=DIR  Input directory for judge mode and init test preset
+  --output-dir=DIR Output directory for judge mode and init test preset
+  --solution=FILE  Solution filename for init stress preset
+  --brute=FILE     Brute filename for init stress preset
+  --generator=FILE Generator filename for init stress preset
+  --contest        Init a/, b/, c/ problem folders instead of one workspace
+  --vscode         Generate .vscode/tasks.json for scaffolded workflow
+  --gitignore      Append .exvex/ to .gitignore during init
+  --yes            Accept init defaults without prompting
   --               Stop option parsing; treat following args as positional values
   --no-cache       Disable compile cache for this invocation (.exvex/cache by default)
+  --force          Overwrite init scaffold files if they already exist
   --help, -h       Show this help
 
 Supported extensions:
@@ -714,7 +1197,12 @@ function getJsonErrorCode(message: string) {
     message.includes("must be an integer") ||
     message.includes("must be at least") ||
     message.includes("requires exactly three files") ||
-    message.includes("An entry file is required.")
+    message.includes("An entry file is required.") ||
+    message.includes("Unsupported init language:") ||
+    message.includes("Invalid init preset:") ||
+    message.includes("stress init") ||
+    message.includes("require --preset=stress") ||
+    message.includes("cannot be used with stress init")
   ) {
     return "ARG_PARSE_ERROR";
   }
@@ -760,6 +1248,10 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
 
   if (command === "stress") {
     return parseStressArgs(rest);
+  }
+
+  if (command === "init") {
+    return parseInitArgs(rest);
   }
 
   return parseRunArgs(args);
@@ -843,6 +1335,22 @@ function logRunFailure(
   }
 }
 
+function logInitSummary(summary: InitSummary, logger: CliLogger) {
+  const heading =
+    summary.overwrittenPaths.length > 0
+      ? "Created/updated files:"
+      : "Created files:";
+  logger.log(heading);
+
+  for (const path of summary.createdPaths) {
+    logger.log(`  ${path}`);
+  }
+
+  logger.log("");
+  logger.log("Next:");
+  logger.log(`  ${summary.nextCommand}`);
+}
+
 export async function runCli(
   args: string[],
   dependencies: CliDependencies = defaultCliDependencies,
@@ -862,6 +1370,18 @@ export async function runCli(
       }
 
       parsedArgs = interactiveArgs;
+    }
+
+    if ((parsedArgs ?? args).length === 1 && (parsedArgs ?? args)[0] === "init" && dependencies.isTty) {
+      const initArgs = await (dependencies.promptForInitArgs
+        ? dependencies.promptForInitArgs()
+        : promptForInitCommandArgs());
+
+      if (initArgs === null) {
+        return 0;
+      }
+
+      parsedArgs = initArgs;
     }
 
     const parsed = parseCliArgs(parsedArgs ?? args);
@@ -916,6 +1436,31 @@ export async function runCli(
         logJudgeSummary(summary, logger, dependencies.isTty);
       }
       return summary.failed === 0 ? 0 : 1;
+    }
+
+    if (parsed.command === "init") {
+      const summary = await dependencies.initProject({
+        cwd: dependencies.cwd(),
+        language: parsed.language ?? "cpp",
+        preset: parsed.preset ?? "test",
+        force: parsed.force,
+        contest: parsed.contest,
+        vscode: parsed.vscode,
+        gitignore: parsed.gitignore,
+        inputDir: parsed.inputDir,
+        outputDir: parsed.outputDir,
+        entryFile: parsed.entryFile,
+        solutionFile: parsed.solutionFile,
+        bruteFile: parsed.bruteFile,
+        generatorFile: parsed.generatorFile,
+      });
+
+      if (parsed.json) {
+        emitJson(logger, summary);
+      } else {
+        logInitSummary(summary, logger);
+      }
+      return 0;
     }
 
     const jsonMode = parsed.json === true;

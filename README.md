@@ -17,6 +17,7 @@ exvex is built for competitive programmers who switch between languages and want
 - Cache compiled C, C++, Java, Go, Rust, and Kotlin artifacts
 - Judge `input/*.txt` against `output/*.txt`
 - Stress test a solution against a brute-force implementation
+- Scaffold ready-to-use workspaces with `exvex init`
 - Customize compiler commands and defaults with `exvex.config.json`
 - Emit structured `--json` output for editor and CI integrations
 - Prompt interactively when launched in a TTY without arguments, including optional `--json`
@@ -48,6 +49,33 @@ exvex solution.java --timeout 3000
 ```
 
 When you run `exvex` with no arguments in an interactive terminal, it prompts for mode, required files, timeout, cache choice, and optional JSON output.
+
+### Initialize a workspace
+
+```bash
+exvex init
+exvex init cpp
+exvex init python --preset=run
+exvex init cpp --stress
+exvex init java --preset=stress --force
+exvex init cpp --json
+exvex init cpp --contest --vscode --gitignore
+exvex init cpp --input-dir=samples/in --output-dir=samples/out
+```
+
+`exvex init` scaffolds starter files so users do not need to hand-create `main.*`, `input/`, `output/`, or stress-test files.
+
+- Default preset is `test`
+- Bare `exvex init` in an interactive terminal opens a wizard
+- `test` preset creates `main.*`, `input/1.txt`, and `output/1.txt`
+- `stress` preset creates `solution.*`, `brute.*`, and `gen.*`
+- `--run`, `--test`, and `--stress` are shortcuts for `--preset=...`
+- `--json` prints machine-readable scaffold summary for editor/extensions
+- `--contest` creates `a/`, `b/`, and `c/` problem folders
+- `--vscode` generates `.vscode/tasks.json`
+- `--gitignore` appends `.exvex/` to `.gitignore`
+- `--input-dir` and `--output-dir` customize sample folder names during init test preset
+- `--force` overwrites existing scaffold files
 
 ### Judge sample cases
 
@@ -87,10 +115,19 @@ On first mismatch or runtime failure, exvex writes failing input, both outputs, 
 - `--input-dir DIR` or `--input-dir=DIR`: override judge input directory
 - `--output-dir DIR` or `--output-dir=DIR`: override judge output directory
 - `--iterations N` or `--iterations=N`: set stress-test iteration count, default `100`
+- `--preset NAME` or `--preset=NAME`: init preset, one of `run`, `test`, `stress`
 - `--json`: print machine-readable JSON for run, judge, or stress mode
 - `--timeout MS` or `--timeout=MS`: set timeout in milliseconds, default `2000`
 - `--timeout 0`: disable timeout entirely
 - `--no-cache`: bypass compile cache for current invocation
+- `--contest`: scaffold `a/`, `b/`, `c/` problem folders during init
+- `--vscode`: generate `.vscode/tasks.json` during init
+- `--gitignore`: append `.exvex/` to `.gitignore` during init
+- `--entry FILE`: init entry filename for run/test presets
+- `--input-dir DIR`, `--output-dir DIR`: init custom sample dirs for test preset
+- `--solution FILE`, `--brute FILE`, `--generator FILE`: init stress filenames
+- `--yes`: accept init defaults without prompting
+- `--force`: overwrite existing init scaffold files
 - `--help` or `-h`: print help
 - `--`: stop option parsing so later arguments are treated as positional filenames
 
@@ -104,6 +141,7 @@ On first mismatch or runtime failure, exvex writes failing input, both outputs, 
 - Stress failures also write `metadata.json` with iteration number, failure reason, and summary message
 - JSON error output includes structured codes for parse, config, and missing-toolchain failures
 - Extensionless files work when exvex can detect language from a shebang or recognizable source pattern
+- `exvex init` defaults to a C++ sample-judge scaffold when run non-interactively with no extra flags
 - `retainTempArtifactsOnSuccess` and `retainTempArtifactsOnFailure` control whether `--no-cache` build artifacts are kept
 - `stressArtifactMode` controls whether stress failures overwrite `.exvex/stress/` or create timestamped directories
 

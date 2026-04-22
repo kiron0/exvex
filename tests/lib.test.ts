@@ -906,7 +906,7 @@ it(
       const directory = await createTempDir("exvex-cache-hit-");
       const entryPath = join(directory, "main.cpp");
       const compilerLogPath = join(directory, "compiler.log");
-      const compilerWrapperPath = join(directory, "fake-gpp");
+      const compilerWrapperPath = join(directory, "fake-gpp.js");
 
       await writeFile(
         entryPath,
@@ -915,15 +915,17 @@ it(
       await writeFile(
         compilerWrapperPath,
         [
-          "#!/bin/sh",
-          `printf 'compile\\n' >> ${JSON.stringify(compilerLogPath)}`,
-          'exec g++ "$@"',
+          'const { appendFileSync } = require("fs");',
+          'const { spawnSync } = require("child_process");',
+          `appendFileSync(${JSON.stringify(compilerLogPath)}, "compile\\n");`,
+          'const result = spawnSync("g++", process.argv.slice(2), { stdio: "inherit" });',
+          'if (result.error) throw result.error;',
+          'process.exit(result.status ?? 0);',
         ].join("\n"),
       );
-      execFileSync("chmod", ["+x", compilerWrapperPath]);
       await writeFile(
         join(directory, "exvex.config.json"),
-        JSON.stringify({ cpp: compilerWrapperPath }, null, 2),
+        JSON.stringify({ cpp: `${process.execPath} ${compilerWrapperPath}` }, null, 2),
       );
 
       const firstResult = await runFile({
