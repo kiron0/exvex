@@ -1182,6 +1182,7 @@ export async function loadConfig(cwd: string = process.cwd()) {
   } catch (error) {
     throw new Error(
       `Failed to parse ${CONFIG_FILENAME}: ${(error as Error).message}`,
+      { cause: error },
     );
   }
 

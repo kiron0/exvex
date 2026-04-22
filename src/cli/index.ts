@@ -110,6 +110,25 @@ const defaultCliDependencies: CliDependencies = {
   initProject,
 };
 
+function assertPromptString(
+  value: string | symbol,
+  fieldName: string,
+): string {
+  if (typeof value !== "string") {
+    throw new Error(`Prompt cancelled while reading ${fieldName}.`);
+  }
+
+  return value;
+}
+
+function assertInitLanguage(value: string | symbol): InitLanguage {
+  if (typeof value !== "string" || !INIT_LANGUAGES.includes(value as InitLanguage)) {
+    throw new Error(`Unsupported init language: ${String(value)}`);
+  }
+
+  return value as InitLanguage;
+}
+
 function getDefaultInitEntryFile(language: InitLanguage) {
   if (language === "java" || language === "kotlin") {
     return `Main${language === "java" ? ".java" : ".kt"}`;
@@ -200,6 +219,8 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
     return null;
   }
 
+  const selectedLanguage = assertInitLanguage(language);
+
   const force = await confirm({
     message: "Overwrite scaffold files if they already exist?",
     initialValue: false,
@@ -237,7 +258,7 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
   }
 
   if (preset === "stress") {
-    const defaults = getDefaultInitStressFiles(language);
+    const defaults = getDefaultInitStressFiles(selectedLanguage);
 
     const solution = await text({
       message: "Solution file",
@@ -272,7 +293,7 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
     return [
       "init",
       ...(jsonOutput ? ["--json"] : []),
-      language,
+      selectedLanguage,
       "--preset=stress",
       ...(force ? ["--force"] : []),
       ...(contest ? ["--contest"] : []),
@@ -286,7 +307,7 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
 
   const entryFile = await text({
     message: "Entry file",
-    initialValue: getDefaultInitEntryFile(language),
+    initialValue: getDefaultInitEntryFile(selectedLanguage),
     validate: (value) => (!value ? "Required." : undefined),
   });
   if (isCancel(entryFile)) {
@@ -294,35 +315,41 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
     return null;
   }
 
+  const selectedEntryFile = assertPromptString(entryFile, "entry file");
+
   let inputDir: string | undefined;
   let outputDir: string | undefined;
 
   if (preset === "test") {
-    inputDir = await text({
+    const rawInputDir = await text({
       message: "Input directory",
       initialValue: "input",
       validate: (value) => (!value ? "Required." : undefined),
     });
-    if (isCancel(inputDir)) {
+    if (isCancel(rawInputDir)) {
       outro(CANCEL_MESSAGE);
       return null;
     }
 
-    outputDir = await text({
+    inputDir = assertPromptString(rawInputDir, "input directory");
+
+    const rawOutputDir = await text({
       message: "Output directory",
       initialValue: "output",
       validate: (value) => (!value ? "Required." : undefined),
     });
-    if (isCancel(outputDir)) {
+    if (isCancel(rawOutputDir)) {
       outro(CANCEL_MESSAGE);
       return null;
     }
+
+    outputDir = assertPromptString(rawOutputDir, "output directory");
   }
 
   return [
     "init",
     ...(jsonOutput ? ["--json"] : []),
-    language,
+    selectedLanguage,
     `--preset=${preset}`,
     ...(force ? ["--force"] : []),
     ...(contest ? ["--contest"] : []),
@@ -330,7 +357,7 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
     ...(gitignore ? ["--gitignore"] : []),
     ...(inputDir ? [`--input-dir=${inputDir}`] : []),
     ...(outputDir ? [`--output-dir=${outputDir}`] : []),
-    `--entry=${entryFile}`,
+    `--entry=${selectedEntryFile}`,
   ];
 }
 
