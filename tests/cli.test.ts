@@ -666,6 +666,22 @@ describe("command formatters", () => {
     );
   });
 
+  it("escapes POSIX shell expansion characters in formatted commands", () => {
+    const expectedRunCommand =
+      process.platform === "win32"
+        ? 'exvex "main$HOME`pwd`.cpp"'
+        : 'exvex "main\\$HOME\\`pwd\\`.cpp"';
+    const expectedStressCommand =
+      process.platform === "win32"
+        ? 'exvex stress "sol$1.cpp" brute.cpp gen.cpp'
+        : 'exvex stress "sol\\$1.cpp" brute.cpp gen.cpp';
+
+    expect(formatRunCommand("main$HOME`pwd`.cpp")).toBe(expectedRunCommand);
+    expect(formatStressCommand("sol$1.cpp", "brute.cpp", "gen.cpp")).toBe(
+      expectedStressCommand,
+    );
+  });
+
   it("formats stress paths with -- when any positional path starts with dash", () => {
     expect(
       formatStressCommand("solution.cpp", "-brute.cpp", "gen file.cpp"),
@@ -1610,6 +1626,44 @@ describe("initProject", () => {
       expect(
         readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8"),
       ).toContain('exvex test \\"solve&go.py\\"');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("escapes POSIX shell expansion characters in generated nextCommand and vscode tasks", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-shell-expand-"));
+
+    try {
+      const summary = await initProject({
+        cwd,
+        language: "python",
+        preset: "test",
+        vscode: true,
+        entryFile: "solve$HOME.py",
+        inputDir: "samples`in",
+        outputDir: "samples$out",
+      });
+
+      if (process.platform === "win32") {
+        expect(summary.nextCommand).toBe(
+          'exvex test --input-dir="samples`in" --output-dir="samples$out" "solve$HOME.py"',
+        );
+        expect(
+          readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8"),
+        ).toContain(
+          'exvex test --input-dir=\\"samples`in\\" --output-dir=\\"samples$out\\" \\"solve$HOME.py\\"',
+        );
+      } else {
+        expect(summary.nextCommand).toBe(
+          'exvex test --input-dir="samples\\`in" --output-dir="samples\\$out" "solve\\$HOME.py"',
+        );
+        expect(
+          readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8"),
+        ).toContain(
+          'exvex test --input-dir=\\"samples\\\\`in\\" --output-dir=\\"samples\\\\$out\\" \\"solve\\\\$HOME.py\\"',
+        );
+      }
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

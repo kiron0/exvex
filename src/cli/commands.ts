@@ -1,5 +1,14 @@
 export function formatArg(value: string) {
-  return /^[A-Za-z0-9_./-]+$/.test(value) ? value : JSON.stringify(value);
+  if (/^[A-Za-z0-9_./-]+$/.test(value)) {
+    return value;
+  }
+
+  if (process.platform === "win32") {
+    return JSON.stringify(value);
+  }
+
+  // POSIX shells still expand $, `, ", and \ inside double quotes.
+  return `"${value.replace(/["\\$`]/g, "\\$&")}"`;
 }
 
 export function formatRunCommand(entryFile: string) {
