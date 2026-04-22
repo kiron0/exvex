@@ -41,6 +41,18 @@ bunDescribe("built CLI", () => {
     expect(stdout).toContain(".rb");
   });
 
+  it("prints version from the built artifact", async () => {
+    const { stdout } = await execFile(
+      process.execPath,
+      ["dist/index.js", "--version"],
+      {
+        cwd: rootDir,
+      },
+    );
+
+    expect(stdout.trim()).toBe("0.1.1");
+  });
+
   it("returns a validation error from the built artifact", async () => {
     await expect(
       execFile(process.execPath, ["dist/index.js", "--unknown"], {

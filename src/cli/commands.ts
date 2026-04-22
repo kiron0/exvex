@@ -1,0 +1,46 @@
+export function formatArg(value: string) {
+  return /^[A-Za-z0-9_./-]+$/.test(value) ? value : JSON.stringify(value);
+}
+
+export function formatRunCommand(entryFile: string) {
+  return entryFile.startsWith("-")
+    ? `exvex -- ${formatArg(entryFile)}`
+    : `exvex ${formatArg(entryFile)}`;
+}
+
+export function formatTestCommand(
+  entryFile: string,
+  inputDir?: string,
+  outputDir?: string,
+) {
+  const args = ["exvex", "test"];
+
+  if (inputDir && inputDir !== "input") {
+    args.push(`--input-dir=${formatArg(inputDir)}`);
+  }
+
+  if (outputDir && outputDir !== "output") {
+    args.push(`--output-dir=${formatArg(outputDir)}`);
+  }
+
+  if (entryFile.startsWith("-")) {
+    args.push("--", formatArg(entryFile));
+  } else {
+    args.push(formatArg(entryFile));
+  }
+
+  return args.join(" ");
+}
+
+export function formatStressCommand(
+  solutionFile: string,
+  bruteFile: string,
+  generatorFile: string,
+) {
+  const args = [solutionFile, bruteFile, generatorFile].map(formatArg);
+  const needsDoubleDash = [solutionFile, bruteFile, generatorFile].some(
+    (file) => file.startsWith("-"),
+  );
+
+  return `exvex stress${needsDoubleDash ? " --" : ""} ${args.join(" ")}`;
+}

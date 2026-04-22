@@ -16,6 +16,7 @@ import {
   buildCacheKey,
   detectLanguageForFile,
   describeFirstDifference,
+  getCompilationSourceFilesForTests,
   loadConfig,
   normalizeOutput,
   resolveEntryFile,
@@ -561,6 +562,40 @@ describe("resolveEntryFile", () => {
 
     await expect(detectLanguageForFile(entryPath)).resolves.toBe("ruby");
   });
+
+  it("collects multi-file Go sources while skipping _test.go and nested directories", async () => {
+    const directory = await createTempDir("exvex-go-source-collect-");
+    const nestedDir = join(directory, "util");
+    const entryPath = join(directory, "main.go");
+
+    await mkdir(nestedDir, { recursive: true });
+    await writeFile(entryPath, "package main\nfunc main() {}\n");
+    await writeFile(join(directory, "helper.go"), "package main\n");
+    await writeFile(join(directory, "helper_test.go"), "package main\n");
+    await writeFile(join(nestedDir, "ignored.go"), "package util\n");
+
+    await expect(
+      getCompilationSourceFilesForTests(entryPath, "go"),
+    ).resolves.toEqual([join(directory, "helper.go"), entryPath].sort());
+  });
+
+  it("collects multi-file Kotlin sources recursively and preserves extensionless entry files", async () => {
+    const directory = await createTempDir("exvex-kotlin-source-collect-");
+    const nestedDir = join(directory, "nested");
+    const entryPath = join(directory, "Main");
+
+    await mkdir(nestedDir, { recursive: true });
+    await writeFile(entryPath, "fun main() {}\n");
+    await writeFile(join(directory, "Helper.kt"), "fun helper() {}\n");
+    await writeFile(join(nestedDir, "Nested.kt"), "fun nestedHelper() {}\n");
+
+    await expect(
+      getCompilationSourceFilesForTests(entryPath, "kotlin"),
+    ).resolves.toEqual(
+      [join(directory, "Helper.kt"), join(nestedDir, "Nested.kt"), entryPath]
+        .sort(),
+    );
+  });
 });
 
 describe("output helpers", () => {
@@ -677,6 +712,36 @@ describe("runJudge", () => {
     expect(summary.passed).toBe(1);
     expect(summary.failed).toBe(0);
     expect(summary.cases[0]?.passed).toBe(true);
+  });
+
+  it("uses input/ and output/ next to explicit entry files by default", async () => {
+    const directory = await createTempDir("exvex-judge-entry-dir-");
+    const problemDir = join(directory, "a");
+
+    await mkdir(join(problemDir, "input"), { recursive: true });
+    await mkdir(join(problemDir, "output"), { recursive: true });
+    await writeFile(
+      join(problemDir, "main.js"),
+      [
+        "const fs = require('node:fs');",
+        "const value = Number(fs.readFileSync(0, 'utf8').trim());",
+        "console.log(String(value * 3));",
+      ].join("\n"),
+    );
+    await writeFile(join(problemDir, "input", "1.txt"), "7\n");
+    await writeFile(join(problemDir, "output", "1.txt"), "21\n");
+
+    const summary = await runJudge({
+      cwd: directory,
+      entryFile: "a/main.js",
+    });
+
+    expect(summary.passed).toBe(1);
+    expect(summary.failed).toBe(0);
+    expect(summary.cases[0]?.inputPath).toBe(join(problemDir, "input", "1.txt"));
+    expect(summary.cases[0]?.outputPath).toBe(
+      join(problemDir, "output", "1.txt"),
+    );
   });
 
   it("fails fast when inputs and outputs are not fully paired", async () => {

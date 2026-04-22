@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access } from "node:fs/promises";
+import { access, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -27,10 +27,17 @@ interface BuiltCliModule {
 
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
 const distEntryPath = join(rootDir, "dist/index.js");
+const DIST_SIZE_BUDGET_BYTES = 130 * 1024;
 
 await assert.doesNotReject(
   access(distEntryPath),
   "Built artifact missing at dist/index.js. Run `bun run build` first.",
+);
+
+const distEntryStats = await stat(distEntryPath);
+assert.ok(
+  distEntryStats.size <= DIST_SIZE_BUDGET_BYTES,
+  `Built CLI exceeds size budget: ${distEntryStats.size} bytes > ${DIST_SIZE_BUDGET_BYTES} bytes.`,
 );
 
 const { getHelpText, runCli } = (await import(

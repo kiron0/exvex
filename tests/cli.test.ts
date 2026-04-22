@@ -11,6 +11,11 @@ import { join } from "path";
 import { PassThrough } from "stream";
 import { pathToFileURL } from "url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  formatRunCommand,
+  formatStressCommand,
+  formatTestCommand,
+} from "../src/cli/commands";
 import { initProject } from "../src/cli/init";
 import {
   getHelpText,
@@ -18,6 +23,7 @@ import {
   main,
   parseCliArgs,
   runCli,
+  setPromptModuleLoaderForTests,
   type CliDependencies,
 } from "../src/cli";
 
@@ -131,11 +137,23 @@ function createDependencies(overrides: Partial<CliDependencies> = {}) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  setPromptModuleLoaderForTests(undefined);
 });
 
 describe("parseCliArgs", () => {
   it("returns help when no arguments are provided", () => {
     expect(parseCliArgs([])).toEqual({ help: true });
+  });
+
+  it("parses version flags", () => {
+    expect(parseCliArgs(["--version"])).toEqual({
+      help: false,
+      version: true,
+    });
+    expect(parseCliArgs(["-v"])).toEqual({
+      help: false,
+      version: true,
+    });
   });
 
   it("parses run mode options", () => {
@@ -173,6 +191,82 @@ describe("parseCliArgs", () => {
       inputFile: "sample.txt",
       timeoutMs: 5000,
       useCache: false,
+    });
+  });
+
+  it("allows dash-prefixed space-separated option values for file and dir paths", () => {
+    expect(
+      parseCliArgs(["main.cpp", "--input", "-sample.txt"]),
+    ).toEqual({
+      help: false,
+      command: "run",
+      entryFile: "main.cpp",
+      inputFile: "-sample.txt",
+      timeoutMs: undefined,
+      useCache: true,
+    });
+
+    expect(
+      parseCliArgs(["test", "--input-dir", "-in", "--output-dir", "-out"]),
+    ).toEqual({
+      help: false,
+      command: "test",
+      entryFile: undefined,
+      inputDir: "-in",
+      outputDir: "-out",
+      timeoutMs: undefined,
+      useCache: true,
+    });
+
+    expect(
+      parseCliArgs([
+        "init",
+        "cpp",
+        "--preset",
+        "stress",
+        "--solution",
+        "-sol.cpp",
+        "--brute",
+        "-brute.cpp",
+        "--generator",
+        "-gen.cpp",
+      ]),
+    ).toEqual({
+      help: false,
+      command: "init",
+      language: "cpp",
+      preset: "stress",
+      force: false,
+      yes: false,
+      contest: false,
+      vscode: false,
+      gitignore: false,
+      inputDir: undefined,
+      outputDir: undefined,
+      entryFile: undefined,
+      solutionFile: "-sol.cpp",
+      bruteFile: "-brute.cpp",
+      generatorFile: "-gen.cpp",
+    });
+
+    expect(
+      parseCliArgs(["init", "cpp", "--preset", "run", "--entry", "-main.cpp"]),
+    ).toEqual({
+      help: false,
+      command: "init",
+      language: "cpp",
+      preset: "run",
+      force: false,
+      yes: false,
+      contest: false,
+      vscode: false,
+      gitignore: false,
+      inputDir: undefined,
+      outputDir: undefined,
+      entryFile: "-main.cpp",
+      solutionFile: undefined,
+      bruteFile: undefined,
+      generatorFile: undefined,
     });
   });
 
@@ -502,6 +596,7 @@ describe("getHelpText", () => {
     expect(helpText).toContain("exvex test [entry]");
     expect(helpText).toContain("exvex stress <solution> <brute> <generator>");
     expect(helpText).toContain("exvex init [language]");
+    expect(helpText).toContain("exvex --version");
     expect(helpText).toContain("exvex.config.json");
     expect(helpText).toContain("use 0 to disable timeout");
     expect(helpText).toContain(".exvex/cache");
@@ -510,8 +605,29 @@ describe("getHelpText", () => {
     expect(helpText).toContain("--contest");
     expect(helpText).toContain("--vscode");
     expect(helpText).toContain("--gitignore");
+    expect(helpText).toContain("--version, -v");
     expect(helpText).toContain(".go");
     expect(helpText).toContain(".rb");
+  });
+});
+
+describe("command formatters", () => {
+  it("formats leading-dash run entries with -- separator", () => {
+    expect(formatRunCommand("-solve.cpp")).toBe("exvex -- -solve.cpp");
+  });
+
+  it("formats shell-sensitive test paths deterministically", () => {
+    expect(
+      formatTestCommand("folder name/main.cpp", "samples in", "samples out"),
+    ).toBe(
+      'exvex test --input-dir="samples in" --output-dir="samples out" "folder name/main.cpp"',
+    );
+  });
+
+  it("formats stress paths with -- when any positional path starts with dash", () => {
+    expect(formatStressCommand("solution.cpp", "-brute.cpp", "gen file.cpp")).toBe(
+      'exvex stress -- solution.cpp -brute.cpp "gen file.cpp"',
+    );
   });
 });
 
@@ -522,6 +638,18 @@ describe("runCli", () => {
     await expect(runCli(["--help"], dependencies)).resolves.toBe(0);
 
     expect(logger.log).toHaveBeenCalledWith(expect.stringContaining("Usage:"));
+    expect(dependencies.runFile).not.toHaveBeenCalled();
+    expect(dependencies.runJudge).not.toHaveBeenCalled();
+    expect(dependencies.runStress).not.toHaveBeenCalled();
+    expect(dependencies.initProject).not.toHaveBeenCalled();
+  });
+
+  it("prints version without invoking work", async () => {
+    const { dependencies, logger } = createDependencies();
+
+    await expect(runCli(["--version"], dependencies)).resolves.toBe(0);
+
+    expect(logger.log).toHaveBeenCalledWith("0.1.1");
     expect(dependencies.runFile).not.toHaveBeenCalled();
     expect(dependencies.runJudge).not.toHaveBeenCalled();
     expect(dependencies.runStress).not.toHaveBeenCalled();
@@ -631,6 +759,56 @@ describe("runCli", () => {
     expect(dependencies.runStress).not.toHaveBeenCalled();
     expect(dependencies.initProject).not.toHaveBeenCalled();
     expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("reports prompt loader failures cleanly", async () => {
+    setPromptModuleLoaderForTests(async () => {
+      throw new Error("prompt loader broke");
+    });
+
+    const { dependencies, logger } = createDependencies({
+      isTty: true,
+      promptForArgs: undefined,
+    });
+
+    await expect(runCli([], dependencies)).resolves.toBe(1);
+
+    expect(logger.error).toHaveBeenCalledWith("Error: prompt loader broke");
+  });
+
+  it("retries prompt loading after a previous loader failure", async () => {
+    let shouldFail = true;
+    setPromptModuleLoaderForTests(async () => {
+      if (shouldFail) {
+        throw new Error("prompt loader broke");
+      }
+
+      return {
+        intro: () => undefined,
+        log: { message: () => undefined },
+        outro: () => undefined,
+        isCancel: () => false,
+        select: async () => "help",
+        confirm: async () => false,
+        text: async () => "",
+      } as never;
+    });
+
+    const first = createDependencies({
+      isTty: true,
+      promptForArgs: undefined,
+    });
+    await expect(runCli([], first.dependencies)).resolves.toBe(1);
+    expect(first.logger.error).toHaveBeenCalledWith("Error: prompt loader broke");
+
+    shouldFail = false;
+    const second = createDependencies({
+      isTty: true,
+      promptForArgs: undefined,
+    });
+    await expect(runCli([], second.dependencies)).resolves.toBe(0);
+    expect(second.logger.log).toHaveBeenCalledWith(getHelpText());
+    expect(second.logger.error).not.toHaveBeenCalled();
   });
 
   it("prints help when the interactive prompt chooses help", async () => {
@@ -957,6 +1135,24 @@ describe("runCli", () => {
     expect(logger.error).not.toHaveBeenCalled();
   });
 
+  it("classifies partial stress-init option errors as JSON parse errors", async () => {
+    const { dependencies, logger } = createDependencies();
+
+    await expect(
+      runCli(["init", "--preset=stress", "--solution=sol.cpp", "--json"], dependencies),
+    ).resolves.toBe(1);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"code": "ARG_PARSE_ERROR"'),
+    );
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Stress init requires --solution, --brute, and --generator together",
+      ),
+    );
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
   it("prints dependency errors as JSON when --json is used", async () => {
     const { dependencies, logger } = createDependencies({
       runFile: vi.fn(async () => {
@@ -1080,9 +1276,11 @@ describe("initProject", () => {
       expect(readFileSync(join(cwd, ".gitignore"), "utf8")).toContain(
         ".exvex/",
       );
-      expect(
-        readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8"),
-      ).toContain("cd a && exvex test");
+      const tasksJson = readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8");
+      expect(tasksJson).toContain(
+        '"command": "exvex test --input-dir=samples/in --output-dir=samples/out main.py"',
+      );
+      expect(tasksJson).toContain('"cwd": "${workspaceFolder}/a"');
       expect(
         readFileSync(join(cwd, "a", "samples", "in", "1.txt"), "utf8"),
       ).toBe("");
@@ -1216,6 +1414,27 @@ describe("initProject", () => {
     }
   });
 
+  it("reports created and overwritten scaffold files separately in mixed force runs", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-mixed-force-"));
+    mkdirSync(join(cwd, "input"), { recursive: true });
+    writeFileSync(join(cwd, "main.py"), "print('old')\n");
+
+    try {
+      const summary = await initProject({
+        cwd,
+        language: "python",
+        preset: "test",
+        entryFile: "main.py",
+        force: true,
+      });
+
+      expect(summary.createdPaths).toEqual(["input/1.txt", "output/1.txt"]);
+      expect(summary.overwrittenPaths).toEqual(["main.py"]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("quotes shell-sensitive filenames in nextCommand", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "exvex-init-quote-next-"));
 
@@ -1248,6 +1467,38 @@ describe("initProject", () => {
       expect(
         readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8"),
       ).toContain('exvex test \\"solve&go.py\\"');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes vscode task paths to match scaffolded directories", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-vscode-normalize-"));
+
+    try {
+      await initProject({
+        cwd,
+        language: "python",
+        preset: "test",
+        vscode: true,
+        inputDir: "./samples\\in",
+        outputDir: ".\\samples/out",
+        entryFile: "./solve.py",
+      });
+
+      const tasksJson = readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8");
+      expect(tasksJson).toContain(
+        '"command": "exvex test --input-dir=samples/in --output-dir=samples/out solve.py"',
+      );
+      expect(readFileSync(join(cwd, "samples", "in", "1.txt"), "utf8")).toBe(
+        "",
+      );
+      expect(readFileSync(join(cwd, "samples", "out", "1.txt"), "utf8")).toBe(
+        "",
+      );
+      expect(readFileSync(join(cwd, "solve.py"), "utf8")).toContain(
+        "def main():",
+      );
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

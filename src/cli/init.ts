@@ -1,6 +1,12 @@
 import { mkdir, readFile, stat, writeFile } from "fs/promises";
 import { basename, dirname, extname, isAbsolute, join, normalize } from "path";
 import type { SupportedLanguage } from "../interface";
+import {
+  formatArg,
+  formatRunCommand,
+  formatStressCommand,
+  formatTestCommand,
+} from "./commands";
 
 export type InitPreset = "run" | "test" | "stress";
 export type InitLanguage = SupportedLanguage;
@@ -405,53 +411,6 @@ function renderGeneratorTemplate(language: InitLanguage, filePath: string) {
   }
 }
 
-function formatArg(value: string) {
-  return /^[A-Za-z0-9_./-]+$/.test(value) ? value : JSON.stringify(value);
-}
-
-function formatRunCommand(entryFile: string) {
-  return entryFile.startsWith("-")
-    ? `exvex -- ${formatArg(entryFile)}`
-    : `exvex ${formatArg(entryFile)}`;
-}
-
-function formatTestCommand(
-  entryFile: string,
-  inputDir?: string,
-  outputDir?: string,
-) {
-  const args = ["exvex", "test"];
-
-  if (inputDir && inputDir !== "input") {
-    args.push(`--input-dir=${formatArg(inputDir)}`);
-  }
-
-  if (outputDir && outputDir !== "output") {
-    args.push(`--output-dir=${formatArg(outputDir)}`);
-  }
-
-  if (entryFile.startsWith("-")) {
-    args.push("--", formatArg(entryFile));
-  } else {
-    args.push(formatArg(entryFile));
-  }
-
-  return args.join(" ");
-}
-
-function formatStressCommand(
-  solutionFile: string,
-  bruteFile: string,
-  generatorFile: string,
-) {
-  const args = [solutionFile, bruteFile, generatorFile].map(formatArg);
-  const needsDoubleDash = [solutionFile, bruteFile, generatorFile].some(
-    (file) => file.startsWith("-"),
-  );
-
-  return `exvex stress${needsDoubleDash ? " --" : ""} ${args.join(" ")}`;
-}
-
 function makeFile(path: string, content: string): PlannedFile {
   return { path, content };
 }
@@ -572,27 +531,7 @@ function buildContestWorkspaces(request: InitRequest) {
 }
 
 function buildVscodeTasks(request: InitRequest) {
-  const command =
-    request.preset === "stress"
-      ? formatStressCommand(
-          request.solutionFile ??
-            getDefaultStressFiles(request.language).solutionFile,
-          request.bruteFile ??
-            getDefaultStressFiles(request.language).bruteFile,
-          request.generatorFile ??
-            getDefaultStressFiles(request.language).generatorFile,
-        )
-      : request.preset === "test"
-        ? formatTestCommand(
-            request.entryFile ?? getDefaultEntryFile(request.language),
-            request.inputDir ?? "input",
-            request.outputDir ?? "output",
-          )
-        : formatRunCommand(
-            request.entryFile ?? getDefaultEntryFile(request.language),
-          );
-
-  const contestCommand = request.contest ? `cd a && ${command}` : command;
+  const command = buildSingleWorkspace(request).nextCommand;
 
   return (
     JSON.stringify(
@@ -602,7 +541,14 @@ function buildVscodeTasks(request: InitRequest) {
           {
             label: "exvex: run active scaffold",
             type: "shell",
-            command: contestCommand,
+            command,
+            ...(request.contest
+              ? {
+                  options: {
+                    cwd: "${workspaceFolder}/a",
+                  },
+                }
+              : {}),
             problemMatcher: [],
           },
         ],

@@ -72,7 +72,7 @@ exvex init cpp --input-dir=samples/in --output-dir=samples/out
 - `--run`, `--test`, and `--stress` are shortcuts for `--preset=...`
 - `--json` prints machine-readable scaffold summary for editor/extensions
 - `--contest` creates `a/`, `b/`, and `c/` problem folders
-- `--vscode` generates `.vscode/tasks.json`
+- `--vscode` generates `.vscode/tasks.json` using normalized scaffold paths; contest tasks run from `a/` via VS Code `cwd`
 - `--gitignore` appends `.exvex/` to `.gitignore`
 - `--input-dir` and `--output-dir` customize sample folder names during init test preset
 - `--force` overwrites existing scaffold files
@@ -142,6 +142,7 @@ On first mismatch or runtime failure, exvex writes failing input, both outputs, 
 - JSON error output includes structured codes for parse, config, and missing-toolchain failures
 - Extensionless files work when exvex can detect language from a shebang or recognizable source pattern
 - `exvex init` defaults to a C++ sample-judge scaffold when run non-interactively with no extra flags
+- Generated VS Code tasks reuse normalized scaffold paths, so inputs like `./samples\\in` become stable `samples/in` task arguments
 - `retainTempArtifactsOnSuccess` and `retainTempArtifactsOnFailure` control whether `--no-cache` build artifacts are kept
 - `stressArtifactMode` controls whether stress failures overwrite `.exvex/stress/` or create timestamped directories
 

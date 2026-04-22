@@ -629,6 +629,13 @@ async function getCompilationSourceFiles(
   return [...new Set([...scannedFiles, entryPath])].sort();
 }
 
+export async function getCompilationSourceFilesForTests(
+  entryPath: string,
+  language: SupportedLanguage,
+) {
+  return await getCompilationSourceFiles(entryPath, language);
+}
+
 async function stageMultiFileSourcesWithExtension({
   entryPath,
   sourceFiles,
@@ -1426,10 +1433,23 @@ export async function runJudge({
     ensureNonNegativeInteger(timeoutMs, "timeoutMs");
   }
   const resolvedEntryFile = await resolveEntryFile(workingDirectory, entryFile);
+  const entryDirectory = dirname(resolvedEntryFile);
+  const resolvedInputDir =
+    inputDir !== undefined
+      ? inputDir
+      : config.inputDir === "input"
+        ? relative(workingDirectory, join(entryDirectory, "input")) || "input"
+        : config.inputDir;
+  const resolvedOutputDir =
+    outputDir !== undefined
+      ? outputDir
+      : config.outputDir === "output"
+        ? relative(workingDirectory, join(entryDirectory, "output")) || "output"
+        : config.outputDir;
   const cases = await discoverJudgeCases({
     cwd: workingDirectory,
-    inputDir: inputDir ?? config.inputDir,
-    outputDir: outputDir ?? config.outputDir,
+    inputDir: resolvedInputDir,
+    outputDir: resolvedOutputDir,
   });
   const results: JudgeCaseResult[] = [];
 

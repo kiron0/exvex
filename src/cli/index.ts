@@ -27,6 +27,10 @@ type ParsedCliArgs =
     }
   | {
       help: false;
+      version: true;
+    }
+  | {
+      help: false;
       json?: boolean;
       command: "run";
       entryFile: string;
@@ -103,10 +107,23 @@ const defaultCliDependencies: CliDependencies = {
 };
 
 let promptModulePromise: Promise<PromptModule> | undefined;
+let promptModuleLoader: () => Promise<PromptModule> = () =>
+  import("@clack/prompts");
 
 async function loadPrompts(): Promise<PromptModule> {
-  promptModulePromise ??= import("@clack/prompts");
+  // Keep prompts bundled into dist/index.js. Published package has zero runtime deps.
+  promptModulePromise ??= promptModuleLoader().catch((error) => {
+    promptModulePromise = undefined;
+    throw error;
+  });
   return promptModulePromise;
+}
+
+export function setPromptModuleLoaderForTests(
+  loader: (() => Promise<PromptModule>) | undefined,
+) {
+  promptModuleLoader = loader ?? (() => import("@clack/prompts"));
+  promptModulePromise = undefined;
 }
 
 function assertPromptString(value: string | symbol, fieldName: string): string {
@@ -763,7 +780,9 @@ function parseRunArgs(args: string[]): ParsedCliArgs {
       continue;
     }
 
-    const inputOption = parseOptionValue(args, index, "--input");
+    const inputOption = parseOptionValue(args, index, "--input", {
+      allowDashPrefixed: true,
+    });
     if (inputOption) {
       inputFile = inputOption.value;
       index = inputOption.nextIndex;
@@ -844,14 +863,18 @@ function parseTestArgs(args: string[]): ParsedCliArgs {
       continue;
     }
 
-    const inputDirOption = parseOptionValue(args, index, "--input-dir");
+    const inputDirOption = parseOptionValue(args, index, "--input-dir", {
+      allowDashPrefixed: true,
+    });
     if (inputDirOption) {
       inputDir = inputDirOption.value;
       index = inputDirOption.nextIndex;
       continue;
     }
 
-    const outputDirOption = parseOptionValue(args, index, "--output-dir");
+    const outputDirOption = parseOptionValue(args, index, "--output-dir", {
+      allowDashPrefixed: true,
+    });
     if (outputDirOption) {
       outputDir = outputDirOption.value;
       index = outputDirOption.nextIndex;
@@ -1067,42 +1090,54 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
       continue;
     }
 
-    const entryOption = parseOptionValue(args, index, "--entry");
+    const entryOption = parseOptionValue(args, index, "--entry", {
+      allowDashPrefixed: true,
+    });
     if (entryOption) {
       entryFile = entryOption.value;
       index = entryOption.nextIndex;
       continue;
     }
 
-    const inputDirOption = parseOptionValue(args, index, "--input-dir");
+    const inputDirOption = parseOptionValue(args, index, "--input-dir", {
+      allowDashPrefixed: true,
+    });
     if (inputDirOption) {
       inputDir = inputDirOption.value;
       index = inputDirOption.nextIndex;
       continue;
     }
 
-    const outputDirOption = parseOptionValue(args, index, "--output-dir");
+    const outputDirOption = parseOptionValue(args, index, "--output-dir", {
+      allowDashPrefixed: true,
+    });
     if (outputDirOption) {
       outputDir = outputDirOption.value;
       index = outputDirOption.nextIndex;
       continue;
     }
 
-    const solutionOption = parseOptionValue(args, index, "--solution");
+    const solutionOption = parseOptionValue(args, index, "--solution", {
+      allowDashPrefixed: true,
+    });
     if (solutionOption) {
       solutionFile = solutionOption.value;
       index = solutionOption.nextIndex;
       continue;
     }
 
-    const bruteOption = parseOptionValue(args, index, "--brute");
+    const bruteOption = parseOptionValue(args, index, "--brute", {
+      allowDashPrefixed: true,
+    });
     if (bruteOption) {
       bruteFile = bruteOption.value;
       index = bruteOption.nextIndex;
       continue;
     }
 
-    const generatorOption = parseOptionValue(args, index, "--generator");
+    const generatorOption = parseOptionValue(args, index, "--generator", {
+      allowDashPrefixed: true,
+    });
     if (generatorOption) {
       generatorFile = generatorOption.value;
       index = generatorOption.nextIndex;
@@ -1187,6 +1222,7 @@ Usage:
   exvex test [entry] [--input-dir=DIR] [--output-dir=DIR] [--timeout=MS] [--no-cache]
   exvex stress <solution> <brute> <generator> [--iterations=N] [--timeout=MS] [--no-cache]
   exvex init [language] [--preset=run|test|stress] [--contest] [--vscode] [--gitignore] [--yes] [--force]
+  exvex --version
   exvex --help
 
 Commands:
@@ -1216,6 +1252,7 @@ Options:
   --               Stop option parsing; treat following args as positional values
   --no-cache       Disable compile cache for this invocation (.exvex/cache by default)
   --force          Overwrite init scaffold files if they already exist
+  --version, -v    Print CLI version
   --help, -h       Show this help
 
 Supported extensions:
@@ -1232,6 +1269,8 @@ function emitJson(logger: CliLogger, payload: unknown) {
 }
 
 function getJsonErrorCode(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
   if (
     message.includes("Unknown option:") ||
     message.includes("must not be empty") ||
@@ -1241,10 +1280,10 @@ function getJsonErrorCode(message: string) {
     message.includes("An entry file is required.") ||
     message.includes("Unsupported init language:") ||
     message.includes("Invalid init preset:") ||
-    message.includes("stress init") ||
-    message.includes("require --preset=stress") ||
-    message.includes("require --preset=test") ||
-    message.includes("cannot be used with stress init")
+    normalizedMessage.includes("stress init") ||
+    normalizedMessage.includes("require --preset=stress") ||
+    normalizedMessage.includes("require --preset=test") ||
+    normalizedMessage.includes("cannot be used with stress init")
   ) {
     return "ARG_PARSE_ERROR";
   }
@@ -1276,10 +1315,16 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   }
 
   const endOfOptionsIndex = args.indexOf("--");
-  const argsForHelpCheck =
+  const argsForFlagCheck =
     endOfOptionsIndex >= 0 ? args.slice(0, endOfOptionsIndex) : args;
-  if (argsForHelpCheck.includes("--help") || argsForHelpCheck.includes("-h")) {
+  if (argsForFlagCheck.includes("--help") || argsForFlagCheck.includes("-h")) {
     return { help: true };
+  }
+  if (
+    argsForFlagCheck.includes("--version") ||
+    argsForFlagCheck.includes("-v")
+  ) {
+    return { help: false, version: true };
   }
 
   const [command, ...rest] = args;
@@ -1434,6 +1479,11 @@ export async function runCli(
 
     if (parsed.help) {
       logger.log(getHelpText());
+      return 0;
+    }
+
+    if ("version" in parsed && parsed.version) {
+      logger.log(pkg.version);
       return 0;
     }
 
