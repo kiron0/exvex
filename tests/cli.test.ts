@@ -1,4 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { PassThrough } from "stream";
@@ -380,9 +387,9 @@ describe("parseCliArgs", () => {
     expect(() => parseCliArgs(["init", "--preset=weird"])).toThrow(
       'Invalid init preset: "weird".',
     );
-    expect(() => parseCliArgs(["init", "cpp", "--stress", "--entry=main.cpp"])).toThrow(
-      "--entry cannot be used with stress init.",
-    );
+    expect(() =>
+      parseCliArgs(["init", "cpp", "--stress", "--entry=main.cpp"]),
+    ).toThrow("--entry cannot be used with stress init.");
     expect(() =>
       parseCliArgs(["init", "cpp", "--stress", "--input-dir=samples/in"]),
     ).toThrow("--input-dir and --output-dir cannot be used with stress init.");
@@ -913,7 +920,10 @@ describe("runCli", () => {
     const { dependencies, logger } = createDependencies();
 
     await expect(
-      runCli(["stress", "solution.js", "brute.js", "gen.js", "--json"], dependencies),
+      runCli(
+        ["stress", "solution.js", "brute.js", "gen.js", "--json"],
+        dependencies,
+      ),
     ).resolves.toBe(0);
 
     expect(logger.log).toHaveBeenCalledWith(
@@ -965,7 +975,7 @@ describe("runCli", () => {
   it("prints config-load failures as JSON when --json is used", async () => {
     const { dependencies, logger } = createDependencies({
       runFile: vi.fn(async () => {
-        throw new Error('Failed to parse exvex.config.json: bad json');
+        throw new Error("Failed to parse exvex.config.json: bad json");
       }),
     });
 
@@ -1067,13 +1077,15 @@ describe("initProject", () => {
       expect(summary.nextCommand).toBe(
         "cd a && exvex test --input-dir=samples/in --output-dir=samples/out main.py",
       );
-      expect(readFileSync(join(cwd, ".gitignore"), "utf8")).toContain(".exvex/");
-      expect(readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8")).toContain(
-        "cd a && exvex test",
+      expect(readFileSync(join(cwd, ".gitignore"), "utf8")).toContain(
+        ".exvex/",
       );
-      expect(readFileSync(join(cwd, "a", "samples", "in", "1.txt"), "utf8")).toBe(
-        "",
-      );
+      expect(
+        readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8"),
+      ).toContain("cd a && exvex test");
+      expect(
+        readFileSync(join(cwd, "a", "samples", "in", "1.txt"), "utf8"),
+      ).toBe("");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -1345,9 +1357,9 @@ describe("isCliEntrypoint", () => {
   });
 
   it("returns false for another script path", () => {
-    expect(
-      isCliEntrypoint(["node", join(tmpdir(), "other-script.mjs")]),
-    ).toBe(false);
+    expect(isCliEntrypoint(["node", join(tmpdir(), "other-script.mjs")])).toBe(
+      false,
+    );
   });
 
   it("returns true for the current module path", () => {

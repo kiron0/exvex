@@ -127,7 +127,7 @@ liveDescribe("live CLI e2e", () => {
     try {
       await writeFile(
         join(directory, "main.php"),
-        "<?php\necho \"php-live-ok\\n\";\n",
+        '<?php\necho "php-live-ok\\n";\n',
       );
       await writeFile(
         join(directory, "Main.java"),
@@ -141,7 +141,7 @@ liveDescribe("live CLI e2e", () => {
       );
       await writeFile(
         join(directory, "Main.kt"),
-        ['fun main() {', '    println("kotlin-live-ok")', "}"].join("\n"),
+        ["fun main() {", '    println("kotlin-live-ok")', "}"].join("\n"),
       );
 
       const phpResult = await execFile(

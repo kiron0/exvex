@@ -658,7 +658,8 @@ async function stageMultiFileSourcesWithExtension({
   for (const sourceFile of sourceFiles) {
     const relativeSourcePath = relative(sourceRoot, sourceFile);
     const extensionlessTargetBaseName =
-      sourceFile.endsWith(requiredExtension) || !resolveExtensionlessTargetBaseName
+      sourceFile.endsWith(requiredExtension) ||
+      !resolveExtensionlessTargetBaseName
         ? null
         : resolveExtensionlessTargetBaseName(
             sourceFile,
@@ -1320,7 +1321,11 @@ export async function runFile(request: RunRequest): Promise<RunResult> {
           ? config.retainTempArtifactsOnFailure
           : config.retainTempArtifactsOnSuccess
         : config.retainTempArtifactsOnFailure;
-      await cleanupTempArtifacts(execution.cleanupPath, useCache, retainArtifacts);
+      await cleanupTempArtifacts(
+        execution.cleanupPath,
+        useCache,
+        retainArtifacts,
+      );
     }
   }
 }
@@ -1508,7 +1513,10 @@ export async function writeStressArtifacts({
   await writeFile(solutionOutputPath, solutionOutput);
   await writeFile(bruteOutputPath, bruteOutput);
   if (metadata) {
-    await writeFile(artifactMetadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
+    await writeFile(
+      artifactMetadataPath,
+      `${JSON.stringify(metadata, null, 2)}\n`,
+    );
   }
 
   return {

@@ -104,7 +104,9 @@ function normalizeRelativePath(value: string, fieldName: string) {
   }
 
   const normalized = normalize(trimmed);
-  const segments = normalized.split(/[\\/]+/).filter((segment) => segment !== ".");
+  const segments = normalized
+    .split(/[\\/]+/)
+    .filter((segment) => segment !== ".");
 
   if (segments.some((segment) => segment === "..")) {
     throw new Error(`${fieldName} must stay inside current directory.`);
@@ -276,19 +278,13 @@ function renderStressProgramTemplate(
         "",
       ].join("\n");
     case "rust":
-      return [
-        "fn main() {",
-        `    // TODO: implement ${role}.`,
-        "}",
-        "",
-      ].join("\n");
+      return ["fn main() {", `    // TODO: implement ${role}.`, "}", ""].join(
+        "\n",
+      );
     case "kotlin":
-      return [
-        "fun main() {",
-        `    // TODO: implement ${role}`,
-        "}",
-        "",
-      ].join("\n");
+      return ["fun main() {", `    // TODO: implement ${role}`, "}", ""].join(
+        "\n",
+      );
     case "php":
       return ["<?php", `// TODO: implement ${role}.`, ""].join("\n");
     case "ruby":
@@ -368,8 +364,8 @@ function renderGeneratorTemplate(language: InitLanguage, filePath: string) {
         'import "fmt"',
         "",
         "func main() {",
-        '\t// TODO: generate randomized input.',
-        '\tfmt.Println(0)',
+        "\t// TODO: generate randomized input.",
+        "\tfmt.Println(0)",
         "}",
         "",
       ].join("\n");
@@ -419,7 +415,11 @@ function formatRunCommand(entryFile: string) {
     : `exvex ${formatArg(entryFile)}`;
 }
 
-function formatTestCommand(entryFile: string, inputDir?: string, outputDir?: string) {
+function formatTestCommand(
+  entryFile: string,
+  inputDir?: string,
+  outputDir?: string,
+) {
   const args = ["exvex", "test"];
 
   if (inputDir && inputDir !== "input") {
@@ -445,8 +445,8 @@ function formatStressCommand(
   generatorFile: string,
 ) {
   const args = [solutionFile, bruteFile, generatorFile].map(formatArg);
-  const needsDoubleDash = [solutionFile, bruteFile, generatorFile].some((file) =>
-    file.startsWith("-"),
+  const needsDoubleDash = [solutionFile, bruteFile, generatorFile].some(
+    (file) => file.startsWith("-"),
   );
 
   return `exvex stress${needsDoubleDash ? " --" : ""} ${args.join(" ")}`;
@@ -514,7 +514,12 @@ function buildSingleWorkspace(
     request.language,
     "Entry file",
   );
-  files.push(makeFile(prefix(entryFile), renderEntryTemplate(request.language, entryFile)));
+  files.push(
+    makeFile(
+      prefix(entryFile),
+      renderEntryTemplate(request.language, entryFile),
+    ),
+  );
 
   if (request.preset === "test") {
     const inputDir = validateScaffoldDirPath(
@@ -570,9 +575,12 @@ function buildVscodeTasks(request: InitRequest) {
   const command =
     request.preset === "stress"
       ? formatStressCommand(
-          request.solutionFile ?? getDefaultStressFiles(request.language).solutionFile,
-          request.bruteFile ?? getDefaultStressFiles(request.language).bruteFile,
-          request.generatorFile ?? getDefaultStressFiles(request.language).generatorFile,
+          request.solutionFile ??
+            getDefaultStressFiles(request.language).solutionFile,
+          request.bruteFile ??
+            getDefaultStressFiles(request.language).bruteFile,
+          request.generatorFile ??
+            getDefaultStressFiles(request.language).generatorFile,
         )
       : request.preset === "test"
         ? formatTestCommand(
@@ -580,25 +588,29 @@ function buildVscodeTasks(request: InitRequest) {
             request.inputDir ?? "input",
             request.outputDir ?? "output",
           )
-        : formatRunCommand(request.entryFile ?? getDefaultEntryFile(request.language));
+        : formatRunCommand(
+            request.entryFile ?? getDefaultEntryFile(request.language),
+          );
 
   const contestCommand = request.contest ? `cd a && ${command}` : command;
 
-  return JSON.stringify(
-    {
-      version: "2.0.0",
-      tasks: [
-        {
-          label: "exvex: run active scaffold",
-          type: "shell",
-          command: contestCommand,
-          problemMatcher: [],
-        },
-      ],
-    },
-    null,
-    2,
-  ) + "\n";
+  return (
+    JSON.stringify(
+      {
+        version: "2.0.0",
+        tasks: [
+          {
+            label: "exvex: run active scaffold",
+            type: "shell",
+            command: contestCommand,
+            problemMatcher: [],
+          },
+        ],
+      },
+      null,
+      2,
+    ) + "\n"
+  );
 }
 
 async function getExistingPathType(path: string) {
@@ -614,12 +626,19 @@ async function getExistingPathType(path: string) {
   }
 }
 
-async function assertParentDirectoriesAvailable(cwd: string, relativePath: string) {
-  const segments = normalize(relativePath).split(/[\\/]+/).filter(Boolean);
+async function assertParentDirectoriesAvailable(
+  cwd: string,
+  relativePath: string,
+) {
+  const segments = normalize(relativePath)
+    .split(/[\\/]+/)
+    .filter(Boolean);
 
   for (let index = 0; index < segments.length - 1; index += 1) {
     const parentRelativePath = segments.slice(0, index + 1).join("/");
-    const existingType = await getExistingPathType(join(cwd, parentRelativePath));
+    const existingType = await getExistingPathType(
+      join(cwd, parentRelativePath),
+    );
 
     if (existingType === "file") {
       throw new Error(
@@ -638,7 +657,9 @@ async function appendGitignore(
   const existingType = await getExistingPathType(gitignorePath);
 
   if (existingType === "directory") {
-    throw new Error('Cannot write file ".gitignore" because a directory already exists there.');
+    throw new Error(
+      'Cannot write file ".gitignore" because a directory already exists there.',
+    );
   }
 
   if (existingType === "file") {
@@ -648,7 +669,8 @@ async function appendGitignore(
       return;
     }
 
-    const needsNewline = existingContent.length > 0 && !existingContent.endsWith("\n");
+    const needsNewline =
+      existingContent.length > 0 && !existingContent.endsWith("\n");
     await writeFile(
       gitignorePath,
       `${existingContent}${needsNewline ? "\n" : ""}.exvex/\n`,
@@ -700,7 +722,9 @@ export async function initProject(request: InitRequest): Promise<InitSummary> {
     const existingType = await getExistingPathType(absolutePath);
 
     if (existingType === "directory") {
-      throw new Error(`Cannot write file "${file.path}" because a directory already exists there.`);
+      throw new Error(
+        `Cannot write file "${file.path}" because a directory already exists there.`,
+      );
     }
 
     if (existingType === "file") {

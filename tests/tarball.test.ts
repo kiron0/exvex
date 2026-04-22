@@ -62,9 +62,13 @@ bunDescribe("packed tarball", () => {
   }, 120000);
 
   it("produces a runnable built artifact before packing", async () => {
-    const { stdout } = await execFile(process.execPath, [distEntryPath, "--help"], {
-      cwd: rootDir,
-    });
+    const { stdout } = await execFile(
+      process.execPath,
+      [distEntryPath, "--help"],
+      {
+        cwd: rootDir,
+      },
+    );
 
     expect(stdout).toContain("Usage:");
     expect(stdout).toContain("exvex stress <solution> <brute> <generator>");

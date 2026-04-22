@@ -110,10 +110,7 @@ const defaultCliDependencies: CliDependencies = {
   initProject,
 };
 
-function assertPromptString(
-  value: string | symbol,
-  fieldName: string,
-): string {
+function assertPromptString(value: string | symbol, fieldName: string): string {
   if (typeof value !== "string") {
     throw new Error(`Prompt cancelled while reading ${fieldName}.`);
   }
@@ -122,7 +119,10 @@ function assertPromptString(
 }
 
 function assertInitLanguage(value: string | symbol): InitLanguage {
-  if (typeof value !== "string" || !INIT_LANGUAGES.includes(value as InitLanguage)) {
+  if (
+    typeof value !== "string" ||
+    !INIT_LANGUAGES.includes(value as InitLanguage)
+  ) {
     throw new Error(`Unsupported init language: ${String(value)}`);
   }
 
@@ -1124,7 +1124,9 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
   }
 
   if (resolvedPreset === "stress" && (inputDir || outputDir)) {
-    throw new Error("--input-dir and --output-dir cannot be used with stress init.");
+    throw new Error(
+      "--input-dir and --output-dir cannot be used with stress init.",
+    );
   }
 
   if (resolvedPreset === "run" && (inputDir || outputDir)) {
@@ -1142,8 +1144,12 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
   if (
     resolvedPreset === "stress" &&
-    [solutionFile, bruteFile, generatorFile].some((value) => value === undefined) &&
-    [solutionFile, bruteFile, generatorFile].some((value) => value !== undefined)
+    [solutionFile, bruteFile, generatorFile].some(
+      (value) => value === undefined,
+    ) &&
+    [solutionFile, bruteFile, generatorFile].some(
+      (value) => value !== undefined,
+    )
   ) {
     throw new Error(
       "Stress init requires --solution, --brute, and --generator together when any of them is provided.",
@@ -1404,7 +1410,11 @@ export async function runCli(
       parsedArgs = interactiveArgs;
     }
 
-    if ((parsedArgs ?? args).length === 1 && (parsedArgs ?? args)[0] === "init" && dependencies.isTty) {
+    if (
+      (parsedArgs ?? args).length === 1 &&
+      (parsedArgs ?? args)[0] === "init" &&
+      dependencies.isTty
+    ) {
       const initArgs = await (dependencies.promptForInitArgs
         ? dependencies.promptForInitArgs()
         : promptForInitCommandArgs());
