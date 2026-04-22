@@ -104,13 +104,13 @@ function normalizeRelativePath(value: string, fieldName: string) {
   }
 
   const normalized = normalize(trimmed);
-  const segments = normalized.split(/[\\/]+/);
+  const segments = normalized.split(/[\\/]+/).filter((segment) => segment !== ".");
 
   if (segments.some((segment) => segment === "..")) {
     throw new Error(`${fieldName} must stay inside current directory.`);
   }
 
-  return normalized;
+  return segments.join("/");
 }
 
 function validateScaffoldFilePath(
