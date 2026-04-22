@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 interface PackageManifest {
   bin?: string | Record<string, string>;
+  dependencies?: Record<string, string>;
 }
 
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
@@ -41,12 +42,26 @@ try {
   const packageJson = JSON.parse(
     await readFile(join(rootDir, "package.json"), "utf8"),
   ) as PackageManifest;
+
+  assert.deepEqual(
+    packageJson.dependencies ?? {},
+    {},
+    "Published manifest should not declare runtime dependencies.",
+  );
+
   assert.equal(
     packageJson.bin && typeof packageJson.bin !== "string"
       ? packageJson.bin.exvex
       : packageJson.bin,
     "dist/index.js",
     "Published manifest should expose the exvex bin at dist/index.js.",
+  );
+
+  const distEntry = await readFile(distEntryPath, "utf8");
+  assert.doesNotMatch(
+    distEntry,
+    /from\s*["']@clack\/prompts["']|import\s*\(\s*["']@clack\/prompts["']\s*\)/,
+    "Built CLI must not keep external @clack/prompts imports. Bundle would break after publish.",
   );
 
   process.stdout.write("Packed tarball checks passed.\n");

@@ -1,12 +1,4 @@
-import {
-  confirm,
-  intro,
-  isCancel,
-  log,
-  outro,
-  select,
-  text,
-} from "@clack/prompts";
+import type * as ClackPrompts from "@clack/prompts";
 import pkg from "../../package.json";
 import { realpathSync, statSync } from "fs";
 import { basename } from "path";
@@ -24,6 +16,8 @@ import { formatDurationMs, runFile, runJudge, runStress } from "../lib";
 import { CONFIG_FILENAME } from "../utils";
 
 const CANCEL_MESSAGE = "Thanks for using exvex.";
+
+type PromptModule = typeof ClackPrompts;
 
 type CliLogger = Pick<Console, "error" | "log">;
 
@@ -108,6 +102,13 @@ const defaultCliDependencies: CliDependencies = {
   initProject,
 };
 
+let promptModulePromise: Promise<PromptModule> | undefined;
+
+async function loadPrompts(): Promise<PromptModule> {
+  promptModulePromise ??= import("@clack/prompts");
+  return promptModulePromise;
+}
+
 function assertPromptString(value: string | symbol, fieldName: string): string {
   if (typeof value !== "string") {
     throw new Error(`Prompt cancelled while reading ${fieldName}.`);
@@ -179,6 +180,8 @@ function getDefaultInitStressFiles(language: InitLanguage) {
 }
 
 async function promptForInitCommandArgs(): Promise<string[] | null> {
+  const { confirm, isCancel, outro, select, text } = await loadPrompts();
+
   const jsonOutput = await confirm({
     message: "Emit JSON output?",
     initialValue: false,
@@ -361,6 +364,9 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
 
 /** Returns the collected CLI args, or `null` if the user cancelled. */
 async function promptForInteractiveArgs(): Promise<string[] | null> {
+  const { confirm, intro, isCancel, log, outro, select, text } =
+    await loadPrompts();
+
   intro(`exvex  v${pkg.version}`);
   log.message(pkg.description);
 

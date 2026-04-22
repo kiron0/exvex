@@ -19,6 +19,7 @@
     "format": "prettier --write \"**/*.{ts,json,md}\""
   },
   "devDependencies": {
+    "@clack/prompts": "^1.2.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.6.0",
     "eslint": "^10.2.1",
@@ -59,8 +60,5 @@
     "dist",
     "README.md",
     "LICENSE"
-  ],
-  "dependencies": {
-    "@clack/prompts": "^1.2.0"
-  }
+  ]
 }
