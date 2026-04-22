@@ -9,6 +9,9 @@ export default defineConfig([
     bundle: true,
     splitting: false,
     sourcemap: false,
+    banner: {
+      js: "#!/usr/bin/env node",
+    },
     target: "es2022",
     minify: "terser",
   },
