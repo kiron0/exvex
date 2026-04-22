@@ -1537,6 +1537,8 @@ export async function writeStressArtifacts({
       artifactMetadataPath,
       `${JSON.stringify(metadata, null, 2)}\n`,
     );
+  } else {
+    await rm(artifactMetadataPath, { force: true });
   }
 
   return {

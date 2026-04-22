@@ -688,6 +688,36 @@ describe("writeStressArtifacts", () => {
       "3\n",
     );
   });
+
+  it("removes stale metadata when rewriting artifacts without metadata", async () => {
+    const directory = await createTempDir("exvex-stress-artifacts-stale-");
+
+    const first = await writeStressArtifacts({
+      cwd: directory,
+      inputText: "1\n",
+      solutionOutput: "2\n",
+      bruteOutput: "3\n",
+      metadata: {
+        failureReason: "mismatch",
+        failingIteration: 1,
+        message: "old",
+      },
+    });
+
+    await expect(readFile(first.artifactMetadataPath, "utf8")).resolves.toContain(
+      '"message": "old"',
+    );
+
+    const second = await writeStressArtifacts({
+      cwd: directory,
+      inputText: "4\n",
+      solutionOutput: "5\n",
+      bruteOutput: "6\n",
+    });
+
+    expect(second.artifactMetadataPath).toBe(first.artifactMetadataPath);
+    await expect(stat(second.artifactMetadataPath)).rejects.toThrow();
+  });
 });
 
 describe("runJudge", () => {
