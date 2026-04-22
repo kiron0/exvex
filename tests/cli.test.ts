@@ -1206,6 +1206,7 @@ describe("initProject", () => {
         force: true,
       });
 
+      expect(summary.createdPaths).toEqual([]);
       expect(summary.overwrittenPaths).toEqual(["main.rb"]);
       expect(readFileSync(join(cwd, "main.rb"), "utf8")).toContain(
         "main if __FILE__ == $PROGRAM_NAME",

@@ -715,6 +715,7 @@ export async function initProject(request: InitRequest): Promise<InitSummary> {
   }
 
   const overwrittenPaths: string[] = [];
+  const createdPaths: string[] = [];
 
   for (const file of files) {
     const absolutePath = join(request.cwd, file.path);
@@ -735,6 +736,8 @@ export async function initProject(request: InitRequest): Promise<InitSummary> {
       }
 
       overwrittenPaths.push(file.path);
+    } else {
+      createdPaths.push(file.path);
     }
   }
 
@@ -742,8 +745,6 @@ export async function initProject(request: InitRequest): Promise<InitSummary> {
     await mkdir(join(request.cwd, dirname(file.path)), { recursive: true });
     await writeFile(join(request.cwd, file.path), file.content, "utf8");
   }
-
-  const createdPaths = files.map((file) => file.path);
 
   if (request.gitignore) {
     await appendGitignore(request.cwd, createdPaths, overwrittenPaths);
