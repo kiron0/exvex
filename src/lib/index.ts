@@ -76,6 +76,8 @@ interface PreparedExecution {
 }
 
 type NativeLanguage = "c" | "cpp" | "go" | "rust";
+const MIN_COMPILE_TIMEOUT_MS = 30000;
+const COMPILE_CACHE_VERSION = "compile-v2";
 
 interface StressArtifactMetadata {
   failureReason:
@@ -158,6 +160,14 @@ async function pathExists(path: string) {
   try {
     await access(path);
     return true;
+  } catch {
+    return false;
+  }
+}
+
+async function isFile(path: string) {
+  try {
+    return (await stat(path)).isFile();
   } catch {
     return false;
   }
@@ -359,7 +369,7 @@ function getProcessFailureMessage(
   const header = result.timedOut
     ? `${action} timed out after ${result.timeoutMs}ms.`
     : `${action} failed with exit code ${result.exitCode ?? "unknown"}.`;
-  const details = [header, `Command: ${command.join(" ")}`];
+  const details = [header, `Command: ${formatCommandForDisplay(command)}`];
 
   const stderr = result.stderr.trim();
   const stdout = result.stdout.trim();
@@ -371,6 +381,14 @@ function getProcessFailureMessage(
   }
 
   return details.join("\n");
+}
+
+function formatCommandForDisplay(command: string[]) {
+  return command
+    .map((part) =>
+      /[\s"]/u.test(part) ? `"${part.replace(/"/g, '\\"')}"` : part,
+    )
+    .join(" ");
 }
 
 function getCommandNotFoundMessage(command: string) {
@@ -409,11 +427,18 @@ function getRuntimeEnvironment(): NodeJS.ProcessEnv {
   };
 }
 
+function getCompileTimeoutMs(timeoutMs: number) {
+  return timeoutMs === 0 ? 0 : Math.max(timeoutMs, MIN_COMPILE_TIMEOUT_MS);
+}
+
 function isWindowsCompilerFallbackCandidate(
   language: NativeLanguage,
   command: string,
 ) {
-  if (process.platform !== "win32" || (language !== "c" && language !== "cpp")) {
+  if (
+    process.platform !== "win32" ||
+    (language !== "c" && language !== "cpp")
+  ) {
     return false;
   }
 
@@ -455,8 +480,22 @@ async function getWindowsCompilerFallback(
   ];
 
   for (const command of candidates) {
-    if (await pathExists(command)) {
-      return { command, envPathPrepend: dirname(command) };
+    if (!(await isFile(command))) {
+      continue;
+    }
+
+    const envPathPrepend = dirname(command);
+    try {
+      await runProcess({
+        command,
+        args: ["--version"],
+        cwd: process.cwd(),
+        timeoutMs: 2000,
+        envPathPrepend,
+      });
+      return { command, envPathPrepend };
+    } catch {
+      // Try the next known MSYS2 environment.
     }
   }
 
@@ -483,7 +522,7 @@ async function resolveNativeCompilerExecutable({
       command,
       args: ["--version"],
       cwd,
-      timeoutMs: Math.min(timeoutMs || 2000, 2000),
+      timeoutMs: timeoutMs === 0 ? 0 : 2000,
     });
     return { command };
   } catch (error) {
@@ -618,6 +657,9 @@ async function runProcess({
       const value = chunk.toString();
       stderr += value;
       stderrStream?.write(chunk);
+    });
+    child.stdin?.on("error", () => {
+      // Ignore EPIPE when a process exits before all input is written.
     });
 
     child.once("close", (exitCode) => {
@@ -903,6 +945,7 @@ async function prepareNativeExecution({
 
   const sourceSignature = await getSourceSignature(entryPath, language);
   const sourceFiles = await getCompilationSourceFiles(entryPath, language);
+  const compileTimeoutMs = getCompileTimeoutMs(timeoutMs);
   const effectiveCompileCommand = [
     compileExecutable.command,
     ...compileParts.slice(1),
@@ -966,7 +1009,7 @@ async function prepareNativeExecution({
         command: compileExecutable.command,
         args: compileArgs,
         cwd: compileCwd,
-        timeoutMs,
+        timeoutMs: compileTimeoutMs,
         envPathPrepend: compileExecutable.envPathPrepend,
       });
     } finally {
@@ -1023,6 +1066,7 @@ async function prepareKotlinExecution({
     throw new Error("Invalid runtime command for kotlin.");
   }
 
+  const compileTimeoutMs = getCompileTimeoutMs(timeoutMs);
   const sourceSignature = await getSourceSignature(entryPath, "kotlin");
   const sourceFiles = await getCompilationSourceFiles(entryPath, "kotlin");
   const artifactDir = useCache
@@ -1064,7 +1108,7 @@ async function prepareKotlinExecution({
       command: compileParts[0],
       args: compileArgs,
       cwd: compileCwd,
-      timeoutMs,
+      timeoutMs: compileTimeoutMs,
     });
 
     if (compileResult.timedOut || compileResult.exitCode !== 0) {
@@ -1114,6 +1158,7 @@ async function prepareJavaExecution({
     throw new Error("Invalid runtime command for java.");
   }
 
+  const compileTimeoutMs = getCompileTimeoutMs(timeoutMs);
   const sourceContent = await readFile(entryPath, "utf8");
   const packageName =
     sourceContent.match(
@@ -1163,7 +1208,7 @@ async function prepareJavaExecution({
         ...compileSourceFiles,
       ],
       cwd: compileCwd,
-      timeoutMs,
+      timeoutMs: compileTimeoutMs,
     });
 
     if (compileResult.timedOut || compileResult.exitCode !== 0) {
@@ -1298,7 +1343,7 @@ export function buildCacheKey({
   compileCommand: string;
 }) {
   return createHash("sha1")
-    .update(`${entryPath}\0${sourceSignature}\0${compileCommand}`)
+    .update(`${COMPILE_CACHE_VERSION}\0${entryPath}\0${sourceSignature}\0${compileCommand}`)
     .digest("hex")
     .slice(0, 16);
 }

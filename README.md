@@ -125,6 +125,7 @@ On first mismatch or runtime failure, exvex writes failing input, both outputs, 
 - `--json`: print machine-readable JSON for run, judge, or stress mode
 - `--timeout MS` or `--timeout=MS`: set timeout in milliseconds, default `2000`
 - `--timeout 0`: disable timeout entirely
+- Compile steps use at least 30000ms unless timeout is disabled; the configured timeout still applies to program execution.
 - `--no-cache`: bypass compile cache for current invocation
 - `--contest`: scaffold `a/`, `b/`, `c/` problem folders during init
 - `--vscode`: generate `.vscode/tasks.json` during init
