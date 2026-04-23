@@ -78,6 +78,9 @@ type ParsedCliArgs =
       generatorFile?: string;
     };
 
+type ParsedCliVersionArgs = Extract<ParsedCliArgs, { version: true }>;
+type ParsedCliCommandArgs = Extract<ParsedCliArgs, { command: string }>;
+
 export interface CliDependencies {
   cwd: () => string;
   stdin: Readable;
@@ -1476,6 +1479,14 @@ function wantsJsonOutput(args: string[]) {
   return hasStandaloneTopLevelFlag(argsForJsonCheck, ["--json"]);
 }
 
+function isVersionArgs(parsed: ParsedCliArgs): parsed is ParsedCliVersionArgs {
+  return "version" in parsed && parsed.version === true;
+}
+
+function isCommandArgs(parsed: ParsedCliArgs): parsed is ParsedCliCommandArgs {
+  return "command" in parsed;
+}
+
 const SPACE_SEPARATED_VALUE_OPTIONS = new Set([
   "--input",
   "--timeout",
@@ -1685,9 +1696,13 @@ export async function runCli(
       return 0;
     }
 
-    if ("version" in parsed && parsed.version) {
+    if (isVersionArgs(parsed)) {
       logger.log(pkg.version);
       return 0;
+    }
+
+    if (!isCommandArgs(parsed)) {
+      throw new Error("Internal CLI parse error: expected command arguments.");
     }
 
     if (parsed.command === "run") {
