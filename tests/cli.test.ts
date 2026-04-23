@@ -1859,9 +1859,7 @@ describe("initProject", () => {
       log: { message: () => undefined },
       outro: () => undefined,
       isCancel: () => false,
-      select: vi
-        .fn()
-        .mockResolvedValueOnce("test"),
+      select: vi.fn().mockResolvedValueOnce("test"),
       confirm: vi
         .fn()
         .mockResolvedValueOnce(false)

@@ -1782,7 +1782,10 @@ export async function runJudge({
     const entryInputDir = join(entryDirectory, "input");
     const entryOutputDir = join(entryDirectory, "output");
 
-    if ((await pathExists(entryInputDir)) && (await pathExists(entryOutputDir))) {
+    if (
+      (await pathExists(entryInputDir)) &&
+      (await pathExists(entryOutputDir))
+    ) {
       resolvedInputDir = relative(workingDirectory, entryInputDir) || "input";
       resolvedOutputDir =
         relative(workingDirectory, entryOutputDir) || "output";

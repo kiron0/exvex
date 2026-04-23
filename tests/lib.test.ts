@@ -956,7 +956,9 @@ describe("runJudge", () => {
     });
 
     expect(summary.passed).toBe(1);
-    expect(summary.cases[0]?.inputPath).toBe(join(problemDir, "input", "1.txt"));
+    expect(summary.cases[0]?.inputPath).toBe(
+      join(problemDir, "input", "1.txt"),
+    );
     expect(summary.cases[0]?.outputPath).toBe(
       join(problemDir, "answers", "1.txt"),
     );
