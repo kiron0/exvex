@@ -11,6 +11,7 @@ import { join } from "path";
 import { PassThrough } from "stream";
 import { pathToFileURL } from "url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import pkg from "../package.json";
 import {
   formatRunCommand,
   formatStressCommand,
@@ -707,7 +708,7 @@ describe("runCli", () => {
 
     await expect(runCli(["--version"], dependencies)).resolves.toBe(0);
 
-    expect(logger.log).toHaveBeenCalledWith("0.1.1");
+    expect(logger.log).toHaveBeenCalledWith(pkg.version);
     expect(dependencies.runFile).not.toHaveBeenCalled();
     expect(dependencies.runJudge).not.toHaveBeenCalled();
     expect(dependencies.runStress).not.toHaveBeenCalled();
