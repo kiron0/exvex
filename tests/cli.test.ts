@@ -1011,6 +1011,46 @@ describe("runCli", () => {
     expect(logger.log).toHaveBeenCalledWith("Summary: 1/2 passed, 1 failed.");
   });
 
+  it("prints clear runtime crash details in judge summaries", async () => {
+    const { dependencies, logger } = createDependencies({
+      runJudge: vi.fn(async () => ({
+        entryFile: MAIN_FILE,
+        total: 1,
+        passed: 0,
+        failed: 1,
+        cases: [
+          {
+            name: "1",
+            inputPath: join(INPUT_DIR, "1.txt"),
+            outputPath: join(OUTPUT_DIR, "1.txt"),
+            passed: false,
+            expected: "ok\n",
+            actual: "",
+            durationMs: 12,
+            diff: "Program failed: access violation.",
+            runResult: {
+              entryFile: MAIN_FILE,
+              language: "javascript" as const,
+              command: ["node", MAIN_FILE],
+              exitCode: 3221225477,
+              stdout: "",
+              stderr: "",
+              durationMs: 12,
+              timeoutMs: 2000,
+              timedOut: false,
+            },
+          },
+        ],
+      })),
+    });
+
+    await expect(runCli(["test"], dependencies)).resolves.toBe(1);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      "  Program failed: access violation.",
+    );
+  });
+
   it("prints stress failures and returns a failing status", async () => {
     const { dependencies, logger } = createDependencies({
       runStress: vi.fn(async () => ({
@@ -1130,7 +1170,7 @@ describe("runCli", () => {
         entryFile: MAIN_FILE,
         language: "javascript" as const,
         command: ["node", MAIN_FILE],
-        exitCode: 1,
+        exitCode: 3221225477,
         stdout: "",
         stderr: "",
         durationMs: 10,
@@ -1141,7 +1181,9 @@ describe("runCli", () => {
 
     await expect(runCli(["main.js"], dependencies)).resolves.toBe(1);
 
-    expect(logger.error).toHaveBeenCalledWith("Process exited with code 1.");
+    expect(logger.error).toHaveBeenCalledWith(
+      "Process failed: access violation.",
+    );
   });
 
   it("prints run results as JSON when --json is used", async () => {

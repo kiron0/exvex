@@ -330,3 +330,25 @@ export function formatDurationMs(durationMs: number) {
 
   return `${Math.round(durationMs)}ms`;
 }
+
+const WINDOWS_STATUS_DESCRIPTIONS: Record<number, string> = {
+  0xc0000005: "access violation",
+  0xc000001d: "illegal instruction",
+  0xc0000094: "integer divide by zero",
+  0xc00000fd: "stack overflow",
+};
+
+export function describeExitCode(exitCode: number | null) {
+  if (exitCode === null) {
+    return "unknown exit";
+  }
+
+  const unsignedExitCode = exitCode >>> 0;
+  const windowsStatus = WINDOWS_STATUS_DESCRIPTIONS[unsignedExitCode];
+
+  if (windowsStatus) {
+    return windowsStatus;
+  }
+
+  return `exit code ${exitCode}`;
+}

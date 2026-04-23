@@ -13,7 +13,7 @@ import {
   type InitSummary,
 } from "./init";
 import { formatDurationMs, runFile, runJudge, runStress } from "../lib";
-import { CONFIG_FILENAME } from "../utils";
+import { CONFIG_FILENAME, describeExitCode } from "../utils";
 
 const CANCEL_MESSAGE = "Thanks for using exvex.";
 
@@ -1616,7 +1616,7 @@ function logRunFailure(
 
   logger.error(
     colorize(
-      `Process exited with code ${result.exitCode ?? "unknown"}.`,
+      `Process failed: ${describeExitCode(result.exitCode)}.`,
       "red",
       isTty,
     ),

@@ -44,6 +44,7 @@ import {
   sortCaseNames,
   splitCommand,
   SUPPORTED_SOURCE_EXTENSIONS,
+  describeExitCode,
 } from "../utils";
 
 interface ProcessRunOptions {
@@ -368,7 +369,7 @@ function getProcessFailureMessage(
 ) {
   const header = result.timedOut
     ? `${action} timed out after ${result.timeoutMs}ms.`
-    : `${action} failed with exit code ${result.exitCode ?? "unknown"}.`;
+    : `${action} failed: ${describeExitCode(result.exitCode)}.`;
   const details = [header, `Command: ${formatCommandForDisplay(command)}`];
 
   const stderr = result.stderr.trim();
@@ -1343,7 +1344,9 @@ export function buildCacheKey({
   compileCommand: string;
 }) {
   return createHash("sha1")
-    .update(`${COMPILE_CACHE_VERSION}\0${entryPath}\0${sourceSignature}\0${compileCommand}`)
+    .update(
+      `${COMPILE_CACHE_VERSION}\0${entryPath}\0${sourceSignature}\0${compileCommand}`,
+    )
     .digest("hex")
     .slice(0, 16);
 }
@@ -1694,7 +1697,7 @@ export async function runJudge({
     if (runResult.timedOut) {
       diff = `Timed out after ${runResult.timeoutMs}ms.`;
     } else if (runResult.exitCode !== 0) {
-      diff = `Exited with code ${runResult.exitCode ?? "unknown"}.`;
+      diff = `Program failed: ${describeExitCode(runResult.exitCode)}.`;
     } else if (!passed) {
       diff = describeFirstDifference(expected, runResult.stdout);
     }

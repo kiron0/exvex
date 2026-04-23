@@ -28,7 +28,8 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
-const hasCpp = hasUsableCppToolchain();
+const usableCppCommand = findUsableCppCommand();
+const hasCpp = usableCppCommand !== null;
 const hasGo = commandExists("go");
 const hasRustc = hasUsableRustToolchain();
 const hasJava = commandExists("javac") && commandExists("java");
@@ -71,11 +72,7 @@ function hasUsableRustToolchain() {
   }
 }
 
-function hasUsableCppToolchain() {
-  if (!commandExists("g++", ["--version"])) {
-    return false;
-  }
-
+function canCompileCpp(command: string) {
   const probeDir = mkdtempSync(join(tmpdir(), "exvex-cpp-probe-"));
   const sourcePath = join(probeDir, "probe.cpp");
   const binaryPath = join(
@@ -85,13 +82,27 @@ function hasUsableCppToolchain() {
 
   try {
     writeFileSync(sourcePath, "int main() { return 0; }\n");
-    execFileSync("g++", [sourcePath, "-o", binaryPath], { stdio: "ignore" });
+    execFileSync(command, [sourcePath, "-o", binaryPath], { stdio: "ignore" });
     return true;
   } catch {
     return false;
   } finally {
     rmSync(probeDir, { recursive: true, force: true });
   }
+}
+
+function findUsableCppCommand() {
+  const candidates =
+    process.platform === "win32"
+      ? [
+          "g++",
+          "C:/msys64/ucrt64/bin/g++.exe",
+          "C:/msys64/mingw64/bin/g++.exe",
+          "C:/msys64/clang64/bin/g++.exe",
+        ]
+      : ["g++"];
+
+  return candidates.find((command) => canCompileCpp(command)) ?? null;
 }
 
 function getProcessesMatching(marker: string) {
@@ -1062,7 +1073,7 @@ describe("runFile", () => {
     await expect(stat(result.artifactPath ?? "")).resolves.toBeDefined();
   }, 45000);
 
-  it(
+  it.skipIf(!hasCpp)(
     "reuses cached artifacts instead of recompiling every run",
     async () => {
       const directory = await createTempDir("exvex-cache-hit-");
@@ -1080,7 +1091,7 @@ describe("runFile", () => {
           'const { appendFileSync } = require("fs");',
           'const { spawnSync } = require("child_process");',
           `appendFileSync(${JSON.stringify(compilerLogPath)}, "compile\\n");`,
-          'const result = spawnSync("g++", process.argv.slice(2), { stdio: "inherit" });',
+          `const result = spawnSync(${JSON.stringify(usableCppCommand)}, process.argv.slice(2), { stdio: "inherit" });`,
           "if (result.error) throw result.error;",
           "process.exit(result.status ?? 0);",
         ].join("\n"),
