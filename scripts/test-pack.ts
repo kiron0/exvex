@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile as execFileCallback } from "node:child_process";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -16,13 +15,27 @@ const rootDir = fileURLToPath(new URL("../", import.meta.url));
 const packMetadataPath = join(rootDir, ".exvex-pack.txt");
 const distEntryPath = join(rootDir, "dist/index.js");
 let tarballPath: string | undefined;
-let extractedDir: string | undefined;
+let installDir: string | undefined;
+
+function formatWindowsCmdArg(value: string) {
+  return /[\s"]/u.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+async function runBun(args: string[], cwd: string) {
+  if (process.platform === "win32") {
+    const commandLine = ["bun", ...args].map(formatWindowsCmdArg).join(" ");
+    return await execFile("cmd.exe", ["/d", "/s", "/c", commandLine], { cwd });
+  }
+
+  return await execFile("bun", args, { cwd });
+}
 
 try {
-  await assert.doesNotReject(
-    access(distEntryPath),
-    "Built artifact missing at dist/index.js. Run `bun run build` first.",
-  );
+  try {
+    await access(distEntryPath);
+  } catch {
+    await runBun(["run", "build"], rootDir);
+  }
 
   const packMetadata = await readFile(packMetadataPath, "utf8");
 
@@ -48,10 +61,15 @@ try {
     );
   }
 
-  extractedDir = await mkdtemp(join(tmpdir(), "exvex-pack-check-"));
-  await execFile("tar", ["-xzf", tarballPath, "-C", extractedDir]);
+  installDir = await mkdtemp(join(rootDir, ".tmp-exvex-pack-check-"));
+  await writeFile(
+    join(installDir, "package.json"),
+    '{\n  "name": "exvex-pack-check",\n  "private": true\n}\n',
+    "utf8",
+  );
+  await runBun(["add", tarballPath], installDir);
 
-  const packagedRootDir = join(extractedDir, "package");
+  const packagedRootDir = join(installDir, "node_modules", "exvex");
   const packageJson = JSON.parse(
     await readFile(join(packagedRootDir, "package.json"), "utf8"),
   ) as PackageManifest;
@@ -87,8 +105,8 @@ try {
 
   process.stdout.write("Packed tarball checks passed.\n");
 } finally {
-  if (extractedDir) {
-    await rm(extractedDir, { recursive: true, force: true });
+  if (installDir) {
+    await rm(installDir, { recursive: true, force: true });
   }
   if (tarballPath) {
     await rm(tarballPath, { force: true });
