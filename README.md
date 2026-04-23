@@ -197,7 +197,7 @@ Create `exvex.config.json` in the working directory to override defaults:
 }
 ```
 
-Config command values are tokenized directly by exvex. Keep them as executable-plus-arguments strings such as `"python3"` or `"g++ -O2 -std=c++20"`, not shell pipelines or shell-only syntax. Prefer PATH-based commands such as `"g++ -O2 -std=c++17"` when possible; only use an absolute compiler path when that path is stable on your machine. On Windows, bare `gcc`/`g++` commands automatically prefer common MSYS2 toolchain locations such as `C:/msys64/ucrt64/bin` when present.
+Config command values are tokenized directly by exvex. Keep them as executable-plus-arguments strings such as `"python3"` or `"g++ -O2 -std=c++20"`, not shell pipelines or shell-only syntax. Prefer PATH-based commands such as `"g++ -O2 -std=c++17"` when possible; only use an absolute compiler path when that path is stable on your machine.
 
 ## Sample Directory Layout
 
