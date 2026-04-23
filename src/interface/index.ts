@@ -85,6 +85,8 @@ export interface JudgeCase {
   name: string;
   inputPath: string;
   outputPath: string;
+  inputText?: string;
+  outputText?: string;
 }
 
 export interface JudgeCaseResult extends JudgeCase {

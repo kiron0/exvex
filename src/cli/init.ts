@@ -149,6 +149,10 @@ function validateScaffoldDirPath(value: string, fieldName: string) {
   return normalizeRelativePath(value, fieldName);
 }
 
+function isTextFileSamplePath(path: string) {
+  return extname(path).toLowerCase() === ".txt";
+}
+
 function getJavaClassName(filePath: string) {
   return basename(filePath, ".java");
 }
@@ -483,18 +487,34 @@ function buildSingleWorkspace(
 
   if (request.preset === "test") {
     const inputDir = validateScaffoldDirPath(
-      request.inputDir ?? "input",
-      "Input directory",
+      request.inputDir ?? "input.txt",
+      "Input path",
     );
     const outputDir = validateScaffoldDirPath(
-      request.outputDir ?? "output",
-      "Output directory",
+      request.outputDir ?? "output.txt",
+      "Output path",
     );
 
-    files.push(
-      makeFile(prefix(`${inputDir}/1.txt`), ""),
-      makeFile(prefix(`${outputDir}/1.txt`), ""),
-    );
+    const inputIsFile = isTextFileSamplePath(inputDir);
+    const outputIsFile = isTextFileSamplePath(outputDir);
+
+    if (inputIsFile !== outputIsFile) {
+      throw new Error(
+        "Input and output sample paths must both be .txt files or both be directories.",
+      );
+    }
+
+    if (inputIsFile) {
+      files.push(
+        makeFile(prefix(inputDir), ""),
+        makeFile(prefix(outputDir), ""),
+      );
+    } else {
+      files.push(
+        makeFile(prefix(`${inputDir}/1.txt`), ""),
+        makeFile(prefix(`${outputDir}/1.txt`), ""),
+      );
+    }
 
     return {
       files,

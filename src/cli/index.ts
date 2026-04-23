@@ -215,7 +215,7 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
     message: "Preset",
     initialValue: "test",
     options: [
-      { value: "test", label: "Sample judge workspace", hint: "default" },
+      { value: "test", label: "Sample judge workspace", hint: "recommended" },
       { value: "run", label: "Single-file run workspace" },
       { value: "stress", label: "Stress-test workspace" },
     ],
@@ -343,8 +343,8 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
 
   if (preset === "test") {
     const rawInputDir = await text({
-      message: "Input directory",
-      initialValue: "input",
+      message: "Input path",
+      initialValue: "input.txt",
       validate: (value) => (!value ? "Required." : undefined),
     });
     if (isCancel(rawInputDir)) {
@@ -352,11 +352,11 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
       return null;
     }
 
-    inputDir = assertPromptString(rawInputDir, "input directory");
+    inputDir = assertPromptString(rawInputDir, "input path");
 
     const rawOutputDir = await text({
-      message: "Output directory",
-      initialValue: "output",
+      message: "Output path",
+      initialValue: "output.txt",
       validate: (value) => (!value ? "Required." : undefined),
     });
     if (isCancel(rawOutputDir)) {
@@ -364,7 +364,7 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
       return null;
     }
 
-    outputDir = assertPromptString(rawOutputDir, "output directory");
+    outputDir = assertPromptString(rawOutputDir, "output path");
   }
 
   return [
@@ -463,11 +463,15 @@ async function promptForInteractiveArgs(): Promise<string[] | null> {
   };
 
   /** Optional directory field — skipped when blank; checks existence when provided. */
-  const validateOptionalDir = (v: string | undefined): string | undefined => {
+  const validateOptionalSamplePath = (
+    v: string | undefined,
+  ): string | undefined => {
     if (!v) return undefined;
     const s = statOf(v);
-    if (!s) return `Directory not found: "${v}"`;
-    if (!s.isDirectory()) return `Not a directory: "${v}"`;
+    if (!s) return `Path not found: "${v}"`;
+    if (!s.isDirectory() && !s.isFile()) {
+      return `Not a file or directory: "${v}"`;
+    }
     return undefined;
   };
 
@@ -562,9 +566,9 @@ async function promptForInteractiveArgs(): Promise<string[] | null> {
     }
 
     const inputDir = await text({
-      message: "Input directory",
+      message: "Input path",
       placeholder: "blank for default",
-      validate: validateOptionalDir,
+      validate: validateOptionalSamplePath,
     });
     if (isCancel(inputDir)) {
       outro(CANCEL_MESSAGE);
@@ -572,9 +576,9 @@ async function promptForInteractiveArgs(): Promise<string[] | null> {
     }
 
     const outputDir = await text({
-      message: "Output directory",
+      message: "Output path",
       placeholder: "blank for default",
-      validate: validateOptionalDir,
+      validate: validateOptionalSamplePath,
     });
     if (isCancel(outputDir)) {
       outro(CANCEL_MESSAGE);
@@ -1392,21 +1396,21 @@ Usage:
 
 Commands:
   <entry>          Run a supported source file directly
-  test             Run sample tests from input/output directories
+  test             Run sample tests from input/output paths
   stress           Compare a solution against a brute-force implementation
   init             Scaffold a ready-to-use workspace
 
 Options:
   --input=FILE     Feed input from a file in run mode (also: --input FILE)
-  --input-dir=DIR  Input directory for judge mode (also: --input-dir DIR)
-  --output-dir=DIR Output directory for judge mode (also: --output-dir DIR)
+  --input-dir=DIR  Input path for judge mode (also: --input-dir DIR)
+  --output-dir=DIR Output path for judge mode (also: --output-dir DIR)
   --iterations=N   Number of stress iterations (default: 100; also: --iterations N)
   --preset=NAME    Init preset: run, test, or stress
   --json           Print machine-readable JSON summaries for run, test, or stress mode
   --timeout=MS     Override execution timeout in milliseconds; use 0 to disable timeout
   --entry=FILE     Entry filename for init run/test presets
-  --input-dir=DIR  Input directory for judge mode and init test preset
-  --output-dir=DIR Output directory for judge mode and init test preset
+  --input-dir=DIR  Input path for judge mode and init test preset
+  --output-dir=DIR Output path for judge mode and init test preset
   --solution=FILE  Solution filename for init stress preset
   --brute=FILE     Brute filename for init stress preset
   --generator=FILE Generator filename for init stress preset
@@ -1425,7 +1429,7 @@ Supported extensions:
 
 Configuration:
   exvex reads exvex.config.json from current working directory when present.
-  Default judge dirs: input/ and output/.
+  Default judge paths: input.txt and output.txt. Also supports input/ and output/ directories.
 `.trim();
 }
 
@@ -1450,6 +1454,7 @@ function getJsonErrorCode(message: string) {
     message.includes("must stay inside current directory.") ||
     message.includes('must end with "') ||
     message.includes("must use a valid Java class name before") ||
+    message.includes("must both be .txt files or both be directories.") ||
     normalizedMessage.includes("stress init") ||
     normalizedMessage.includes("require --preset=stress") ||
     normalizedMessage.includes("require --preset=test") ||

@@ -16,6 +16,7 @@ exvex is built for competitive programmers who switch between languages and want
 - Detect languages from file extensions, shebangs, and common source patterns
 - Cache compiled C, C++, Java, Go, Rust, and Kotlin artifacts
 - Judge `input/*.txt` against `output/*.txt`
+- Judge multi-case `input.txt` against `output.txt` with `---` separators
 - Stress test a solution against a brute-force implementation
 - Scaffold ready-to-use workspaces with `exvex init`
 - Customize compiler commands and defaults with `exvex.config.json`
@@ -65,11 +66,11 @@ exvex init cpp --contest --vscode --gitignore
 exvex init cpp --input-dir=samples/in --output-dir=samples/out
 ```
 
-`exvex init` scaffolds starter files so users do not need to hand-create `main.*`, `input/`, `output/`, or stress-test files.
+`exvex init` scaffolds starter files so users do not need to hand-create `main.*`, sample files, or stress-test files.
 
 - Default preset is `test`
 - Bare `exvex init` in an interactive terminal opens a wizard
-- `test` preset creates `main.*`, `input/1.txt`, and `output/1.txt`
+- `test` preset creates `main.*`, `input.txt`, and `output.txt` by default
 - `stress` preset creates `solution.*`, `brute.*`, and `gen.*`
 - `--run`, `--test`, and `--stress` are shortcuts for `--preset=...`
 - `--yes` accepts init defaults without prompting
@@ -77,7 +78,7 @@ exvex init cpp --input-dir=samples/in --output-dir=samples/out
 - `--contest` creates `a/`, `b/`, and `c/` problem folders
 - `--vscode` generates `.vscode/tasks.json` using normalized scaffold paths; contest tasks run from `a/` via VS Code `cwd`
 - `--gitignore` appends `.exvex/` to `.gitignore`
-- `--input-dir` and `--output-dir` customize sample folder names during init test preset
+- `--input-dir` and `--output-dir` customize sample file or folder names during init test preset
 - init file and directory names must stay relative to current directory
 - stress init file names must be distinct from each other
 - `--force` overwrites existing scaffold files
@@ -89,9 +90,36 @@ exvex test
 exvex test main.cpp
 exvex test --input-dir=samples/in --output-dir=samples/out
 exvex test --input-dir samples/in --output-dir samples/out
+exvex test --input-dir=input.txt --output-dir=output.txt
 ```
 
 `exvex test` auto-detects an entry file in the current directory by preferring a single `main.*` file and otherwise requiring exactly one supported source file.
+
+Judge mode supports two sample layouts:
+
+- Directory mode: `input/1.txt` pairs with `output/1.txt`
+- Single-file mode: `input.txt` pairs with `output.txt`, with each case separated by a line containing only `---`
+
+Single-file mode is auto-detected when default `input/` and `output/` directories do not exist and `input.txt` plus `output.txt` do exist. If both layouts exist, directory mode wins by default. Explicit `--input-dir` and `--output-dir` paths always win, including file paths.
+
+Example single-file layout:
+
+```txt
+input.txt
+3
+1 10
+2
+---
+4
+1 5
+1 8
+3
+
+output.txt
+1
+---
+2
+```
 
 ### Stress test
 
@@ -117,8 +145,8 @@ On first mismatch or runtime failure, exvex writes failing input, both outputs, 
 ### Options at a glance
 
 - `--input FILE` or `--input=FILE`: read stdin from file in run mode
-- `--input-dir DIR` or `--input-dir=DIR`: override judge input directory
-- `--output-dir DIR` or `--output-dir=DIR`: override judge output directory
+- `--input-dir DIR` or `--input-dir=DIR`: override judge input path
+- `--output-dir DIR` or `--output-dir=DIR`: override judge output path
 - `--iterations N` or `--iterations=N`: set stress-test iteration count, default `100`
 - `--preset NAME` or `--preset=NAME`: init preset, one of `run`, `test`, `stress`
 - `--run`, `--test`, `--stress`: init preset shortcuts for `run`, `test`, `stress`
@@ -131,7 +159,7 @@ On first mismatch or runtime failure, exvex writes failing input, both outputs, 
 - `--vscode`: generate `.vscode/tasks.json` during init
 - `--gitignore`: append `.exvex/` to `.gitignore` during init
 - `--entry FILE`: init entry filename for run/test presets
-- `--input-dir DIR`, `--output-dir DIR`: init custom sample dirs for test preset
+- `--input-dir DIR`, `--output-dir DIR`: init custom sample paths for test preset
 - `--solution FILE`, `--brute FILE`, `--generator FILE`: init stress filenames
 - `--yes`: accept init defaults without prompting
 - `--force`: overwrite existing init scaffold files
@@ -143,7 +171,9 @@ On first mismatch or runtime failure, exvex writes failing input, both outputs, 
 
 - Compiled artifacts are cached under `.exvex/cache/` by default for C, C++, Java, Go, Rust, and Kotlin
 - `--no-cache` uses temporary build artifacts instead of reusing cached ones
-- Judge mode defaults to `input/` and `output/` directories unless overridden in config or CLI flags
+- Judge mode defaults to `input.txt` and `output.txt`, and also supports `input/` and `output/` directories
+- Judge mode auto-falls back to `input.txt` and `output.txt` with `---` separators when default sample directories are absent
+- If both directory mode and single-file mode exist, directory mode wins unless CLI/config explicitly points at files
 - Output comparison normalizes line endings and ignores trailing whitespace at end of output
 - Stress failures write `failing-input.txt`, `solution-output.txt`, and `brute-output.txt` under `.exvex/stress/`
 - Stress failures also write `metadata.json` with iteration number, failure reason, and summary message
@@ -190,8 +220,8 @@ Create `exvex.config.json` in the working directory to override defaults:
   "ruby": "ruby",
   "timeout": 2000,
   "cacheDir": ".exvex/cache",
-  "inputDir": "input",
-  "outputDir": "output",
+  "inputDir": "input.txt",
+  "outputDir": "output.txt",
   "retainTempArtifactsOnSuccess": false,
   "retainTempArtifactsOnFailure": false,
   "stressArtifactMode": "overwrite"
@@ -213,6 +243,29 @@ problem/
 `-- output/
     |-- 1.txt
     `-- 2.txt
+```
+
+## Single-File Sample Layout
+
+```text
+problem/
+|-- main.cpp
+|-- input.txt
+`-- output.txt
+```
+
+Use a separator line containing only `---` between cases in both files.
+
+```txt
+input.txt
+21
+---
+7
+
+output.txt
+42
+---
+14
 ```
 
 ## License

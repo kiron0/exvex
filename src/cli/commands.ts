@@ -24,11 +24,11 @@ export function formatTestCommand(
 ) {
   const args = ["exvex", "test"];
 
-  if (inputDir && inputDir !== "input") {
+  if (inputDir && inputDir !== "input" && inputDir !== "input.txt") {
     args.push(`--input-dir=${formatArg(inputDir)}`);
   }
 
-  if (outputDir && outputDir !== "output") {
+  if (outputDir && outputDir !== "output" && outputDir !== "output.txt") {
     args.push(`--output-dir=${formatArg(outputDir)}`);
   }
 

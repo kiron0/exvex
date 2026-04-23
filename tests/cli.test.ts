@@ -118,7 +118,7 @@ function createDependencies(overrides: Partial<CliDependencies> = {}) {
       cwd: PROJECT_DIR,
       language: "cpp" as const,
       preset: "test" as const,
-      createdPaths: ["main.cpp", "input/1.txt", "output/1.txt"],
+      createdPaths: ["main.cpp", "input.txt", "output.txt"],
       overwrittenPaths: [],
       nextCommand: "exvex test main.cpp",
     })),
@@ -667,6 +667,12 @@ describe("command formatters", () => {
     );
   });
 
+  it("omits default single-file sample paths from test commands", () => {
+    expect(formatTestCommand("main.cpp", "input.txt", "output.txt")).toBe(
+      "exvex test main.cpp",
+    );
+  });
+
   it("escapes POSIX shell expansion characters in formatted commands", () => {
     const expectedRunCommand =
       process.platform === "win32"
@@ -1082,7 +1088,7 @@ describe("runCli", () => {
         cwd: PROJECT_DIR,
         language: "cpp" as const,
         preset: "test" as const,
-        createdPaths: ["main.cpp", "input/1.txt", "output/1.txt"],
+        createdPaths: ["main.cpp", "input.txt", "output.txt"],
         overwrittenPaths: [],
         nextCommand: "exvex test main.cpp",
       })),
@@ -1116,7 +1122,7 @@ describe("runCli", () => {
         cwd: PROJECT_DIR,
         language: "cpp" as const,
         preset: "test" as const,
-        createdPaths: ["input/1.txt"],
+        createdPaths: ["output.txt"],
         overwrittenPaths: ["main.cpp"],
         nextCommand: "exvex test main.cpp",
       })),
@@ -1127,7 +1133,7 @@ describe("runCli", () => {
     ).resolves.toBe(0);
 
     expect(logger.log).toHaveBeenCalledWith("Created/updated files:");
-    expect(logger.log).toHaveBeenCalledWith("  input/1.txt");
+    expect(logger.log).toHaveBeenCalledWith("  output.txt");
     expect(logger.log).toHaveBeenCalledWith("  main.cpp");
   });
 
@@ -1137,7 +1143,7 @@ describe("runCli", () => {
         cwd: PROJECT_DIR,
         language: "cpp" as const,
         preset: "test" as const,
-        createdPaths: ["main.cpp", "input/1.txt", "output/1.txt"],
+        createdPaths: ["main.cpp", "input.txt", "output.txt"],
         overwrittenPaths: [],
         nextCommand: "exvex test main.cpp",
       })),
@@ -1312,6 +1318,40 @@ describe("runCli", () => {
     expect(logger.error).not.toHaveBeenCalled();
   });
 
+  it("classifies mixed init sample path errors as JSON parse errors", async () => {
+    const { dependencies, logger } = createDependencies({
+      initProject: vi.fn(async () => {
+        throw new Error(
+          "Input and output sample paths must both be .txt files or both be directories.",
+        );
+      }),
+    });
+
+    await expect(
+      runCli(
+        [
+          "init",
+          "cpp",
+          "--preset=test",
+          "--input-dir=input.txt",
+          "--output-dir=output",
+          "--json",
+        ],
+        dependencies,
+      ),
+    ).resolves.toBe(1);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"code": "ARG_PARSE_ERROR"'),
+    );
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '"message": "Input and output sample paths must both be .txt files or both be directories."',
+      ),
+    );
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
   it("classifies partial stress-init option errors as JSON parse errors", async () => {
     const { dependencies, logger } = createDependencies();
 
@@ -1416,15 +1456,40 @@ describe("initProject", () => {
 
       expect(summary.createdPaths).toEqual([
         "main.cpp",
-        "input/1.txt",
-        "output/1.txt",
+        "input.txt",
+        "output.txt",
       ]);
       expect(summary.nextCommand).toBe("exvex test main.cpp");
       expect(readFileSync(join(cwd, "main.cpp"), "utf8")).toContain(
         "#include <bits/stdc++.h>",
       );
-      expect(readFileSync(join(cwd, "input", "1.txt"), "utf8")).toBe("");
-      expect(readFileSync(join(cwd, "output", "1.txt"), "utf8")).toBe("");
+      expect(readFileSync(join(cwd, "input.txt"), "utf8")).toBe("");
+      expect(readFileSync(join(cwd, "output.txt"), "utf8")).toBe("");
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("creates single-file test scaffold files when sample paths are txt files", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-test-inline-"));
+
+    try {
+      const summary = await initProject({
+        cwd,
+        language: "cpp",
+        preset: "test",
+        inputDir: "input.txt",
+        outputDir: "output.txt",
+      });
+
+      expect(summary.createdPaths).toEqual([
+        "main.cpp",
+        "input.txt",
+        "output.txt",
+      ]);
+      expect(summary.nextCommand).toBe("exvex test main.cpp");
+      expect(readFileSync(join(cwd, "input.txt"), "utf8")).toBe("");
+      expect(readFileSync(join(cwd, "output.txt"), "utf8")).toBe("");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -1618,7 +1683,7 @@ describe("initProject", () => {
 
   it("reports created and overwritten scaffold files separately in mixed force runs", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "exvex-init-mixed-force-"));
-    mkdirSync(join(cwd, "input"), { recursive: true });
+    writeFileSync(join(cwd, "input.txt"), "");
     writeFileSync(join(cwd, "main.py"), "print('old')\n");
 
     try {
@@ -1630,8 +1695,8 @@ describe("initProject", () => {
         force: true,
       });
 
-      expect(summary.createdPaths).toEqual(["input/1.txt", "output/1.txt"]);
-      expect(summary.overwrittenPaths).toEqual(["main.py"]);
+      expect(summary.createdPaths).toEqual(["output.txt"]);
+      expect(summary.overwrittenPaths).toEqual(["main.py", "input.txt"]);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -1766,7 +1831,7 @@ describe("initProject", () => {
 
   it("rejects test scaffold when input path parent is a file", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "exvex-init-input-parent-"));
-    writeFileSync(join(cwd, "input"), "occupied\n");
+    writeFileSync(join(cwd, "input.txt"), "occupied\n");
 
     try {
       await expect(
@@ -1776,7 +1841,76 @@ describe("initProject", () => {
           preset: "test",
         }),
       ).rejects.toThrow(
-        'Cannot create directory "input" because a file already exists there.',
+        'Refusing to overwrite existing file "input.txt". Pass --force to overwrite scaffold files.',
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("supports single-file sample paths in interactive test prompts", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-interactive-test-files-"));
+    writeFileSync(join(cwd, "main.cpp"), "#include <iostream>\n");
+    writeFileSync(join(cwd, "input.txt"), "1\n");
+    writeFileSync(join(cwd, "output.txt"), "2\n");
+
+    const promptModule = {
+      intro: () => undefined,
+      log: { message: () => undefined },
+      outro: () => undefined,
+      isCancel: () => false,
+      select: vi
+        .fn()
+        .mockResolvedValueOnce("test"),
+      confirm: vi
+        .fn()
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(false),
+      text: vi
+        .fn()
+        .mockResolvedValueOnce("main.cpp")
+        .mockResolvedValueOnce("input.txt")
+        .mockResolvedValueOnce("output.txt")
+        .mockResolvedValueOnce("")
+        .mockResolvedValueOnce(""),
+    };
+
+    setPromptModuleLoaderForTests(async () => promptModule as never);
+    const { dependencies } = createDependencies({
+      cwd: () => cwd,
+      isTty: true,
+      promptForArgs: undefined,
+    });
+
+    try {
+      await expect(runCli([], dependencies)).resolves.toBe(0);
+
+      expect(dependencies.runJudge).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entryFile: "main.cpp",
+          inputDir: "input.txt",
+          outputDir: "output.txt",
+        }),
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects mixed file and directory sample paths for test scaffolds", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-mixed-samples-"));
+
+    try {
+      await expect(
+        initProject({
+          cwd,
+          language: "cpp",
+          preset: "test",
+          inputDir: "input.txt",
+          outputDir: "output",
+        }),
+      ).rejects.toThrow(
+        "Input and output sample paths must both be .txt files or both be directories.",
       );
     } finally {
       rmSync(cwd, { recursive: true, force: true });

@@ -226,8 +226,8 @@ describe("loadConfig", () => {
       rust: "rustc -O -g",
       ruby: "ruby --disable-gems",
       cpp: "g++ -O2 -std=c++17",
-      inputDir: "input",
-      outputDir: "output",
+      inputDir: "input.txt",
+      outputDir: "output.txt",
     });
   });
 
@@ -814,6 +814,208 @@ describe("runJudge", () => {
     );
   });
 
+  it("uses input.txt and output.txt next to explicit entry files by default", async () => {
+    const directory = await createTempDir("exvex-judge-entry-file-");
+    const problemDir = join(directory, "a");
+
+    await mkdir(problemDir, { recursive: true });
+    await writeFile(
+      join(problemDir, "main.js"),
+      [
+        "const fs = require('node:fs');",
+        "const value = Number(fs.readFileSync(0, 'utf8').trim());",
+        "console.log(String(value * 4));",
+      ].join("\n"),
+    );
+    await writeFile(join(problemDir, "input.txt"), "7\n");
+    await writeFile(join(problemDir, "output.txt"), "28\n");
+
+    const summary = await runJudge({
+      cwd: directory,
+      entryFile: "a/main.js",
+    });
+
+    expect(summary.passed).toBe(1);
+    expect(summary.failed).toBe(0);
+    expect(summary.cases[0]?.inputPath).toBe(join(problemDir, "input.txt"));
+    expect(summary.cases[0]?.outputPath).toBe(join(problemDir, "output.txt"));
+  });
+
+  it("keeps entry-relative single-file defaults when only one judge path is overridden", async () => {
+    const directory = await createTempDir("exvex-judge-entry-file-partial-");
+    const problemDir = join(directory, "a");
+
+    await mkdir(problemDir, { recursive: true });
+    await writeFile(
+      join(problemDir, "main.js"),
+      [
+        "const fs = require('node:fs');",
+        "const value = Number(fs.readFileSync(0, 'utf8').trim());",
+        "console.log(String(value * 5));",
+      ].join("\n"),
+    );
+    await writeFile(join(problemDir, "input.txt"), "7\n");
+    await writeFile(join(problemDir, "expected.txt"), "35\n");
+
+    const summary = await runJudge({
+      cwd: directory,
+      entryFile: "a/main.js",
+      outputDir: "a/expected.txt",
+    });
+
+    expect(summary.passed).toBe(1);
+    expect(summary.cases[0]?.inputPath).toBe(join(problemDir, "input.txt"));
+    expect(summary.cases[0]?.outputPath).toBe(join(problemDir, "expected.txt"));
+  });
+
+  it("supports multiple judge cases from input.txt and output.txt", async () => {
+    const directory = await createTempDir("exvex-judge-inline-");
+
+    await writeFile(
+      join(directory, "main.js"),
+      [
+        "const fs = require('node:fs');",
+        "const value = Number(fs.readFileSync(0, 'utf8').trim());",
+        "console.log(String(value * 2));",
+      ].join("\n"),
+    );
+    await writeFile(join(directory, "input.txt"), "21\n---\n7\n");
+    await writeFile(join(directory, "output.txt"), "42\n---\n14\n");
+
+    const summary = await runJudge({
+      cwd: directory,
+      entryFile: "main.js",
+    });
+
+    expect(summary.passed).toBe(2);
+    expect(summary.failed).toBe(0);
+    expect(summary.cases).toHaveLength(2);
+    expect(summary.cases[0]?.name).toBe("1");
+    expect(summary.cases[1]?.name).toBe("2");
+    expect(summary.cases[0]?.inputPath).toBe(join(directory, "input.txt"));
+    expect(summary.cases[0]?.outputPath).toBe(join(directory, "output.txt"));
+  });
+
+  it("prefers input/ and output/ directories when both directory and single-file cases exist", async () => {
+    const directory = await createTempDir("exvex-judge-conflict-");
+
+    await writeFile(
+      join(directory, "main.js"),
+      [
+        "const fs = require('node:fs');",
+        "const value = Number(fs.readFileSync(0, 'utf8').trim());",
+        "console.log(String(value * 2));",
+      ].join("\n"),
+    );
+    await mkdir(join(directory, "input"));
+    await mkdir(join(directory, "output"));
+    await writeFile(join(directory, "input", "1.txt"), "3\n");
+    await writeFile(join(directory, "output", "1.txt"), "6\n");
+    await writeFile(join(directory, "input.txt"), "21\n---\n7\n");
+    await writeFile(join(directory, "output.txt"), "42\n---\n14\n");
+
+    const summary = await runJudge({
+      cwd: directory,
+      entryFile: "main.js",
+    });
+
+    expect(summary.passed).toBe(1);
+    expect(summary.total).toBe(1);
+    expect(summary.cases[0]?.inputPath).toBe(join(directory, "input", "1.txt"));
+    expect(summary.cases[0]?.outputPath).toBe(
+      join(directory, "output", "1.txt"),
+    );
+  });
+
+  it("keeps entry-relative directory defaults when only one judge path is overridden", async () => {
+    const directory = await createTempDir("exvex-judge-entry-dir-partial-");
+    const problemDir = join(directory, "a");
+
+    await mkdir(join(problemDir, "input"), { recursive: true });
+    await mkdir(join(problemDir, "answers"), { recursive: true });
+    await writeFile(
+      join(problemDir, "main.js"),
+      [
+        "const fs = require('node:fs');",
+        "const value = Number(fs.readFileSync(0, 'utf8').trim());",
+        "console.log(String(value * 6));",
+      ].join("\n"),
+    );
+    await writeFile(
+      join(directory, "exvex.config.json"),
+      JSON.stringify({ inputDir: "input", outputDir: "output" }, null, 2),
+    );
+    await writeFile(join(problemDir, "input", "1.txt"), "7\n");
+    await writeFile(join(problemDir, "answers", "1.txt"), "42\n");
+    await writeFile(join(problemDir, "input.txt"), "999\n");
+
+    const summary = await runJudge({
+      cwd: directory,
+      entryFile: "a/main.js",
+      outputDir: "a/answers",
+    });
+
+    expect(summary.passed).toBe(1);
+    expect(summary.cases[0]?.inputPath).toBe(join(problemDir, "input", "1.txt"));
+    expect(summary.cases[0]?.outputPath).toBe(
+      join(problemDir, "answers", "1.txt"),
+    );
+  });
+
+  it("uses single-file judge cases when explicit file paths are provided", async () => {
+    const directory = await createTempDir("exvex-judge-inline-explicit-");
+
+    await writeFile(
+      join(directory, "main.js"),
+      [
+        "const fs = require('node:fs');",
+        "const value = Number(fs.readFileSync(0, 'utf8').trim());",
+        "console.log(String(value * 2));",
+      ].join("\n"),
+    );
+    await mkdir(join(directory, "input"));
+    await mkdir(join(directory, "output"));
+    await writeFile(join(directory, "input", "1.txt"), "3\n");
+    await writeFile(join(directory, "output", "1.txt"), "6\n");
+    await writeFile(join(directory, "cases.in.txt"), "21\n---\n7\n");
+    await writeFile(join(directory, "cases.out.txt"), "42\n---\n14\n");
+
+    const summary = await runJudge({
+      cwd: directory,
+      entryFile: "main.js",
+      inputDir: "cases.in.txt",
+      outputDir: "cases.out.txt",
+    });
+
+    expect(summary.passed).toBe(2);
+    expect(summary.total).toBe(2);
+    expect(summary.cases[0]?.inputPath).toBe(join(directory, "cases.in.txt"));
+    expect(summary.cases[0]?.outputPath).toBe(join(directory, "cases.out.txt"));
+  });
+
+  it("treats a single dash line as normal input, not a case separator", async () => {
+    const directory = await createTempDir("exvex-judge-inline-dash-");
+
+    await writeFile(
+      join(directory, "main.js"),
+      [
+        "const fs = require('node:fs');",
+        "process.stdout.write(fs.readFileSync(0, 'utf8'));",
+      ].join("\n"),
+    );
+    await writeFile(join(directory, "input.txt"), "hello\n-\nworld\n");
+    await writeFile(join(directory, "output.txt"), "hello\n-\nworld\n");
+
+    const summary = await runJudge({
+      cwd: directory,
+      entryFile: "main.js",
+    });
+
+    expect(summary.passed).toBe(1);
+    expect(summary.total).toBe(1);
+    expect(summary.cases[0]?.inputText).toBe("hello\n-\nworld");
+  });
+
   it("fails fast when inputs and outputs are not fully paired", async () => {
     const directory = await createTempDir("exvex-judge-mismatch-");
 
@@ -830,6 +1032,38 @@ describe("runJudge", () => {
         entryFile: "main.js",
       }),
     ).rejects.toThrow("Judge case directories are incomplete");
+  });
+
+  it("fails fast when single-file judge cases are not fully paired", async () => {
+    const directory = await createTempDir("exvex-judge-inline-mismatch-");
+
+    await writeFile(join(directory, "main.js"), "console.log('ok');\n");
+    await writeFile(join(directory, "input.txt"), "1\n---\n2\n");
+    await writeFile(join(directory, "output.txt"), "ok\n");
+
+    await expect(
+      runJudge({
+        cwd: directory,
+        entryFile: "main.js",
+      }),
+    ).rejects.toThrow("Judge case files are incomplete");
+  });
+
+  it("rejects empty cases caused by malformed single-file separators", async () => {
+    const directory = await createTempDir("exvex-judge-inline-empty-case-");
+
+    await writeFile(join(directory, "main.js"), "console.log('ok');\n");
+    await writeFile(join(directory, "input.txt"), "---\n1\n---\n\n---\n2\n");
+    await writeFile(join(directory, "output.txt"), "ok\n---\nok\n---\nok\n");
+
+    await expect(
+      runJudge({
+        cwd: directory,
+        entryFile: "main.js",
+      }),
+    ).rejects.toThrow(
+      "Judge case files contain an empty case. Remove leading, trailing, or repeated --- separators.",
+    );
   });
 
   it("rejects non-directory judge paths with clear errors", async () => {

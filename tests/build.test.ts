@@ -47,6 +47,7 @@ bunDescribe("built CLI", () => {
 
     expect(stdout).toContain("Usage:");
     expect(stdout).toContain("exvex test [entry]");
+    expect(stdout).toContain("Default judge paths: input.txt and output.txt.");
     expect(stdout).toContain(".go");
     expect(stdout).toContain(".rb");
   });

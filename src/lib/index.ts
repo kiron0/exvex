@@ -210,6 +210,77 @@ function ensurePositiveInteger(value: number, label: string) {
   }
 }
 
+const INLINE_JUDGE_CASE_SEPARATOR = /^\s*---+\s*$/;
+
+function splitInlineJudgeCases(content: string) {
+  const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const lines = normalized.split("\n");
+
+  if (lines.at(-1) === "") {
+    lines.pop();
+  }
+
+  const chunks: string[] = [];
+  let current: string[] = [];
+
+  for (const line of lines) {
+    if (INLINE_JUDGE_CASE_SEPARATOR.test(line)) {
+      chunks.push(current.join("\n"));
+      current = [];
+      continue;
+    }
+
+    current.push(line);
+  }
+
+  chunks.push(current.join("\n"));
+
+  return chunks;
+}
+
+async function discoverInlineJudgeCases(
+  inputPath: string,
+  outputPath: string,
+): Promise<JudgeCase[]> {
+  await ensureFileExists(inputPath, "Input file");
+  await ensureFileExists(outputPath, "Output file");
+
+  const [inputContent, outputContent] = await Promise.all([
+    readFile(inputPath, "utf8"),
+    readFile(outputPath, "utf8"),
+  ]);
+  const inputCases = splitInlineJudgeCases(inputContent);
+  const outputCases = splitInlineJudgeCases(outputContent);
+  const hasEmptyInputCase = inputCases.some((sample) => sample.trim() === "");
+  const hasEmptyOutputCase = outputCases.some((sample) => sample.trim() === "");
+
+  if (hasEmptyInputCase || hasEmptyOutputCase) {
+    throw new Error(
+      "Judge case files contain an empty case. Remove leading, trailing, or repeated --- separators.",
+    );
+  }
+
+  if (inputCases.length !== outputCases.length) {
+    throw new Error(
+      `Judge case files are incomplete: found ${inputCases.length} input case${inputCases.length === 1 ? "" : "s"} and ${outputCases.length} output case${outputCases.length === 1 ? "" : "s"}.`,
+    );
+  }
+
+  if (inputCases.length === 0) {
+    throw new Error(
+      `No matching judge cases found in ${inputPath} and ${outputPath}.`,
+    );
+  }
+
+  return inputCases.map((inputText, index) => ({
+    name: String(index + 1),
+    inputPath,
+    outputPath,
+    inputText,
+    outputText: outputCases[index]!,
+  }));
+}
+
 function detectLanguageFromContent(content: string): SupportedLanguage | null {
   const trimmed = content.trimStart();
   const shebang = content.split("\n", 1)[0] ?? "";
@@ -1573,6 +1644,39 @@ export async function discoverJudgeCases({
 }): Promise<JudgeCase[]> {
   const resolvedInputDir = resolveFrom(cwd, inputDir);
   const resolvedOutputDir = resolveFrom(cwd, outputDir);
+  const inputIsFile = await isFile(resolvedInputDir);
+  const outputIsFile = await isFile(resolvedOutputDir);
+
+  if (inputIsFile || outputIsFile) {
+    if (inputIsFile && !outputIsFile) {
+      throw new Error(
+        `Input directory must be a directory: ${resolvedInputDir}`,
+      );
+    }
+
+    if (!inputIsFile && outputIsFile) {
+      throw new Error(
+        `Output directory must be a directory: ${resolvedOutputDir}`,
+      );
+    }
+
+    return discoverInlineJudgeCases(resolvedInputDir, resolvedOutputDir);
+  }
+
+  if (
+    !(await pathExists(resolvedInputDir)) &&
+    !(await pathExists(resolvedOutputDir))
+  ) {
+    const fallbackInputFile = join(dirname(resolvedInputDir), "input.txt");
+    const fallbackOutputFile = join(dirname(resolvedOutputDir), "output.txt");
+
+    if (
+      (await isFile(fallbackInputFile)) &&
+      (await isFile(fallbackOutputFile))
+    ) {
+      return discoverInlineJudgeCases(fallbackInputFile, fallbackOutputFile);
+    }
+  }
 
   await ensureDirectoryExists(resolvedInputDir, "Input directory");
   await ensureDirectoryExists(resolvedOutputDir, "Output directory");
@@ -1659,18 +1763,45 @@ export async function runJudge({
   }
   const resolvedEntryFile = await resolveEntryFile(workingDirectory, entryFile);
   const entryDirectory = dirname(resolvedEntryFile);
-  const resolvedInputDir =
-    inputDir !== undefined
-      ? inputDir
-      : config.inputDir === "input"
-        ? relative(workingDirectory, join(entryDirectory, "input")) || "input"
+  const defaultInputPath =
+    config.inputDir === "input"
+      ? relative(workingDirectory, join(entryDirectory, "input")) || "input"
+      : config.inputDir === "input.txt"
+        ? relative(workingDirectory, join(entryDirectory, "input.txt")) ||
+          "input.txt"
         : config.inputDir;
-  const resolvedOutputDir =
-    outputDir !== undefined
-      ? outputDir
-      : config.outputDir === "output"
-        ? relative(workingDirectory, join(entryDirectory, "output")) || "output"
+  const defaultOutputPath =
+    config.outputDir === "output"
+      ? relative(workingDirectory, join(entryDirectory, "output")) || "output"
+      : config.outputDir === "output.txt"
+        ? relative(workingDirectory, join(entryDirectory, "output.txt")) ||
+          "output.txt"
         : config.outputDir;
+  let resolvedInputDir: string;
+  let resolvedOutputDir: string;
+
+  if (inputDir !== undefined || outputDir !== undefined) {
+    resolvedInputDir = inputDir ?? defaultInputPath;
+    resolvedOutputDir = outputDir ?? defaultOutputPath;
+  } else if (
+    config.inputDir === "input.txt" &&
+    config.outputDir === "output.txt"
+  ) {
+    const entryInputDir = join(entryDirectory, "input");
+    const entryOutputDir = join(entryDirectory, "output");
+
+    if ((await pathExists(entryInputDir)) && (await pathExists(entryOutputDir))) {
+      resolvedInputDir = relative(workingDirectory, entryInputDir) || "input";
+      resolvedOutputDir =
+        relative(workingDirectory, entryOutputDir) || "output";
+    } else {
+      resolvedInputDir = defaultInputPath;
+      resolvedOutputDir = defaultOutputPath;
+    }
+  } else {
+    resolvedInputDir = defaultInputPath;
+    resolvedOutputDir = defaultOutputPath;
+  }
   const cases = await discoverJudgeCases({
     cwd: workingDirectory,
     inputDir: resolvedInputDir,
@@ -1679,11 +1810,14 @@ export async function runJudge({
   const results: JudgeCaseResult[] = [];
 
   for (const judgeCase of cases) {
-    const expected = await readFile(judgeCase.outputPath, "utf8");
+    const expected =
+      judgeCase.outputText ?? (await readFile(judgeCase.outputPath, "utf8"));
     const runResult = await runFile({
       entryFile: resolvedEntryFile,
       cwd: workingDirectory,
-      inputFile: judgeCase.inputPath,
+      inputFile:
+        judgeCase.inputText === undefined ? judgeCase.inputPath : undefined,
+      inputText: judgeCase.inputText,
       timeoutMs,
       useCache,
     });
