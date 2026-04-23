@@ -1500,10 +1500,7 @@ const SPACE_SEPARATED_VALUE_OPTIONS = new Set([
   "--generator",
 ]);
 
-function hasStandaloneTopLevelFlag(
-  args: string[],
-  flags: string[],
-): boolean {
+function hasStandaloneTopLevelFlag(args: string[], flags: string[]): boolean {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
 

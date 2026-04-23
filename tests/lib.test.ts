@@ -704,9 +704,9 @@ describe("writeStressArtifacts", () => {
       },
     });
 
-    await expect(readFile(first.artifactMetadataPath, "utf8")).resolves.toContain(
-      '"message": "old"',
-    );
+    await expect(
+      readFile(first.artifactMetadataPath, "utf8"),
+    ).resolves.toContain('"message": "old"');
 
     const second = await writeStressArtifacts({
       cwd: directory,
