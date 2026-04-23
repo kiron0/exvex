@@ -1458,7 +1458,7 @@ function getJsonErrorCode(message: string) {
     return "ARG_PARSE_ERROR";
   }
 
-  if (message.includes('Required command not found on PATH: "')) {
+  if (message.includes("Required command not found")) {
     return "COMMAND_NOT_FOUND";
   }
 

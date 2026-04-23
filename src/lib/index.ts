@@ -51,6 +51,7 @@ interface ProcessRunOptions {
   args: string[];
   cwd: string;
   timeoutMs: number;
+  envPathPrepend?: string;
   inputText?: string;
   inputStream?: NodeJS.ReadableStream | null;
   stdoutStream?: NodeJS.WritableStream | null;
@@ -70,6 +71,7 @@ interface PreparedExecution {
   command: string[];
   artifactPath?: string;
   cleanupPath?: string;
+  envPathPrepend?: string;
 }
 
 interface StressArtifactMetadata {
@@ -368,11 +370,72 @@ function getProcessFailureMessage(
   return details.join("\n");
 }
 
+function getCommandNotFoundMessage(command: string) {
+  const isExplicitPath =
+    isAbsolute(command) ||
+    /^[A-Za-z]:[\\/]/.test(command) ||
+    /[\\/]/.test(command);
+
+  if (isExplicitPath) {
+    return `Required command not found: "${command}". Verify the path exists or use a PATH command such as "g++" in ${CONFIG_FILENAME}.`;
+  }
+
+  return `Required command not found on PATH: "${command}". Install the toolchain, add it to PATH, or override it in ${CONFIG_FILENAME}.`;
+}
+
+async function firstExistingPath(paths: string[]) {
+  for (const path of paths) {
+    if (await pathExists(path)) {
+      return path;
+    }
+  }
+
+  return null;
+}
+
+async function resolveAutoNativeCompilerCommand(
+  language: "c" | "cpp" | "go" | "rust",
+  command: string,
+) {
+  if (process.platform !== "win32") {
+    return { command };
+  }
+
+  if (language !== "c" && language !== "cpp") {
+    return { command };
+  }
+
+  const lowerCommand = command.toLowerCase();
+  const compilerName =
+    language === "cpp"
+      ? lowerCommand === "g++" || lowerCommand === "g++.exe"
+        ? "g++.exe"
+        : null
+      : lowerCommand === "gcc" || lowerCommand === "gcc.exe"
+        ? "gcc.exe"
+        : null;
+
+  if (!compilerName) {
+    return { command };
+  }
+
+  const detectedCompiler = await firstExistingPath([
+    `C:/msys64/ucrt64/bin/${compilerName}`,
+    `C:/msys64/mingw64/bin/${compilerName}`,
+    `C:/msys64/clang64/bin/${compilerName}`,
+  ]);
+
+  return detectedCompiler
+    ? { command: detectedCompiler, envPathPrepend: dirname(detectedCompiler) }
+    : { command };
+}
+
 async function runProcess({
   command,
   args,
   cwd,
   timeoutMs,
+  envPathPrepend,
   inputText,
   inputStream,
   stdoutStream,
@@ -381,9 +444,15 @@ async function runProcess({
   return await new Promise((resolvePromise, rejectPromise) => {
     const startedAt = performance.now();
     const useProcessGroup = process.platform !== "win32";
+    const env = envPathPrepend
+      ? {
+          ...process.env,
+          PATH: `${envPathPrepend}${process.platform === "win32" ? ";" : ":"}${process.env.PATH ?? ""}`,
+        }
+      : process.env;
     const child = spawn(command, args, {
       cwd,
-      env: process.env,
+      env,
       windowsHide: true,
       detached: useProcessGroup,
       stdio: ["pipe", "pipe", "pipe"],
@@ -442,11 +511,7 @@ async function runProcess({
         const errorWithCode = error as NodeJS.ErrnoException;
 
         if (errorWithCode.code === "ENOENT") {
-          rejectPromise(
-            new Error(
-              `Required command not found on PATH: "${command}". Install the toolchain or override it in ${CONFIG_FILENAME}.`,
-            ),
-          );
+          rejectPromise(new Error(getCommandNotFoundMessage(command)));
           return;
         }
 
@@ -742,6 +807,10 @@ async function prepareNativeExecution({
   if (compileParts.length === 0) {
     throw new Error(`Invalid compile command for ${language}.`);
   }
+  const compileExecutable = await resolveAutoNativeCompilerCommand(
+    language,
+    compileParts[0],
+  );
 
   const sourceSignature = await getSourceSignature(entryPath, language);
   const sourceFiles = await getCompilationSourceFiles(entryPath, language);
@@ -790,10 +859,11 @@ async function prepareNativeExecution({
     let compileResult: ProcessRunResult;
     try {
       compileResult = await runProcess({
-        command: compileParts[0],
+        command: compileExecutable.command,
         args: compileArgs,
         cwd: compileCwd,
         timeoutMs,
+        envPathPrepend: compileExecutable.envPathPrepend,
       });
     } finally {
       if (stagedGoSourceDir) {
@@ -810,7 +880,7 @@ async function prepareNativeExecution({
       throw new Error(
         getProcessFailureMessage(
           `Compilation (${language})`,
-          [compileParts[0], ...compileArgs],
+          [compileExecutable.command, ...compileArgs],
           compileResult,
         ),
       );
@@ -821,6 +891,7 @@ async function prepareNativeExecution({
     command: [artifactPath],
     artifactPath,
     cleanupPath: useCache ? undefined : artifactDir,
+    envPathPrepend: compileExecutable.envPathPrepend,
   };
 }
 
@@ -1303,6 +1374,7 @@ export async function runFile(request: RunRequest): Promise<RunResult> {
       args: execution.command.slice(1),
       cwd,
       timeoutMs,
+      envPathPrepend: execution.envPathPrepend,
       inputText,
       inputStream: inputText === undefined ? request.stdin : null,
       stdoutStream: request.stdout,

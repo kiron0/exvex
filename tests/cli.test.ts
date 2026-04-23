@@ -1324,7 +1324,7 @@ describe("runCli", () => {
     const { dependencies, logger } = createDependencies({
       runFile: vi.fn(async () => {
         throw new Error(
-          'Required command not found on PATH: "nope". Install the toolchain or override it in exvex.config.json.',
+          'Required command not found on PATH: "nope". Install the toolchain, add it to PATH, or override it in exvex.config.json.',
         );
       }),
     });

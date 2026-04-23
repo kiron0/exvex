@@ -1770,7 +1770,31 @@ describe("runFile", () => {
         timeoutMs: 1000,
       }),
     ).rejects.toThrow(
-      'Required command not found on PATH: "definitely-missing-ruby-command". Install the toolchain or override it in exvex.config.json.',
+      'Required command not found on PATH: "definitely-missing-ruby-command". Install the toolchain, add it to PATH, or override it in exvex.config.json.',
+    );
+  });
+
+  it("reports a missing absolute command path with a PATH-command hint", async () => {
+    const directory = await createTempDir("exvex-missing-tool-path-");
+    const missingCompiler =
+      process.platform === "win32"
+        ? "C:/definitely-missing-exvex/g++.exe"
+        : "/definitely-missing-exvex/g++";
+
+    await writeFile(join(directory, "main.cpp"), "int main() { return 0; }\n");
+    await writeFile(
+      join(directory, "exvex.config.json"),
+      JSON.stringify({ cpp: `${missingCompiler} -O2 -std=c++17` }, null, 2),
+    );
+
+    await expect(
+      runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        timeoutMs: 1000,
+      }),
+    ).rejects.toThrow(
+      `Required command not found: "${missingCompiler}". Verify the path exists or use a PATH command such as "g++" in exvex.config.json.`,
     );
   });
 });
