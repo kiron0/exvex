@@ -35,7 +35,7 @@ const hasRustc = hasUsableRustToolchain();
 const hasJava = commandExists("javac") && commandExists("java");
 const hasKotlinc = commandExists("kotlinc") && commandExists("java");
 const hasRuby = commandExists("ruby");
-const SLOW_TOOLCHAIN_TEST_TIMEOUT_MS = 30000;
+const SLOW_TOOLCHAIN_TEST_TIMEOUT_MS = 60000;
 const CACHE_KEY_ENTRY_PATH = join(tmpdir(), "exvex-cache-key-main.cpp");
 
 function commandExists(command: string, args: string[] = ["--version"]) {
@@ -1049,21 +1049,27 @@ describe("runJudge", () => {
     ).rejects.toThrow("Judge case files are incomplete");
   });
 
-  it("rejects empty cases caused by malformed single-file separators", async () => {
+  it("supports empty single-file cases", async () => {
     const directory = await createTempDir("exvex-judge-inline-empty-case-");
 
-    await writeFile(join(directory, "main.js"), "console.log('ok');\n");
-    await writeFile(join(directory, "input.txt"), "---\n1\n---\n\n---\n2\n");
-    await writeFile(join(directory, "output.txt"), "ok\n---\nok\n---\nok\n");
-
-    await expect(
-      runJudge({
-        cwd: directory,
-        entryFile: "main.js",
-      }),
-    ).rejects.toThrow(
-      "Judge case files contain an empty case. Remove leading, trailing, or repeated --- separators.",
+    await writeFile(
+      join(directory, "main.js"),
+      [
+        "const fs = require('node:fs');",
+        "const input = fs.readFileSync(0, 'utf8');",
+        "process.stdout.write(input.length === 0 ? 'EMPTY\\n' : input);",
+      ].join("\n"),
     );
+    await writeFile(join(directory, "input.txt"), "\n---\nhello\n");
+    await writeFile(join(directory, "output.txt"), "EMPTY\n---\nhello\n");
+
+    const summary = await runJudge({
+      cwd: directory,
+      entryFile: "main.js",
+    });
+
+    expect(summary.passed).toBe(2);
+    expect(summary.total).toBe(2);
   });
 
   it("rejects non-directory judge paths with clear errors", async () => {

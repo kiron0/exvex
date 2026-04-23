@@ -251,14 +251,6 @@ async function discoverInlineJudgeCases(
   ]);
   const inputCases = splitInlineJudgeCases(inputContent);
   const outputCases = splitInlineJudgeCases(outputContent);
-  const hasEmptyInputCase = inputCases.some((sample) => sample.trim() === "");
-  const hasEmptyOutputCase = outputCases.some((sample) => sample.trim() === "");
-
-  if (hasEmptyInputCase || hasEmptyOutputCase) {
-    throw new Error(
-      "Judge case files contain an empty case. Remove leading, trailing, or repeated --- separators.",
-    );
-  }
 
   if (inputCases.length !== outputCases.length) {
     throw new Error(
