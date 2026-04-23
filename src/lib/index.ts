@@ -51,6 +51,8 @@ interface ProcessRunOptions {
   args: string[];
   cwd: string;
   timeoutMs: number;
+  env?: NodeJS.ProcessEnv;
+  envPathPrepend?: string;
   inputText?: string;
   inputStream?: NodeJS.ReadableStream | null;
   stdoutStream?: NodeJS.WritableStream | null;
@@ -70,7 +72,10 @@ interface PreparedExecution {
   command: string[];
   artifactPath?: string;
   cleanupPath?: string;
+  envPathPrepend?: string;
 }
+
+type NativeLanguage = "c" | "cpp" | "go" | "rust";
 
 interface StressArtifactMetadata {
   failureReason:
@@ -381,11 +386,130 @@ function getCommandNotFoundMessage(command: string) {
   return `Required command not found on PATH: "${command}". Install the toolchain, add it to PATH, or override it in ${CONFIG_FILENAME}.`;
 }
 
+function getCommandStartFailureMessage(
+  command: string,
+  error: NodeJS.ErrnoException,
+) {
+  if (error.code === "ENOENT") {
+    return getCommandNotFoundMessage(command);
+  }
+
+  if (error.code === "EPERM" || error.code === "UNKNOWN") {
+    return `Failed to start required command "${command}" (${error.code}). Verify the toolchain is installed, compatible with this system, and available on PATH or override it in ${CONFIG_FILENAME}.`;
+  }
+
+  return `Failed to start "${command}": ${error.message}`;
+}
+
+function getRuntimeEnvironment(): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    DEBUG: "true",
+    CPH: "true",
+  };
+}
+
+function isWindowsCompilerFallbackCandidate(
+  language: NativeLanguage,
+  command: string,
+) {
+  if (process.platform !== "win32" || (language !== "c" && language !== "cpp")) {
+    return false;
+  }
+
+  const lowerCommand = command.toLowerCase();
+  return (
+    (language === "cpp" &&
+      (lowerCommand === "g++" || lowerCommand === "g++.exe")) ||
+    (language === "c" && (lowerCommand === "gcc" || lowerCommand === "gcc.exe"))
+  );
+}
+
+function shouldTryWindowsCompilerFallback(
+  language: NativeLanguage,
+  command: string,
+  error: unknown,
+) {
+  if (!isWindowsCompilerFallbackCandidate(language, command)) {
+    return false;
+  }
+
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.includes(`Failed to start required command "${command}"`) &&
+    (error.message.includes("(UNKNOWN)") || error.message.includes("(EPERM)"))
+  );
+}
+
+async function getWindowsCompilerFallback(
+  language: "c" | "cpp",
+): Promise<{ command: string; envPathPrepend: string } | null> {
+  const compilerName = language === "cpp" ? "g++.exe" : "gcc.exe";
+  const candidates = [
+    `C:/msys64/ucrt64/bin/${compilerName}`,
+    `C:/msys64/mingw64/bin/${compilerName}`,
+    `C:/msys64/clang64/bin/${compilerName}`,
+  ];
+
+  for (const command of candidates) {
+    if (await pathExists(command)) {
+      return { command, envPathPrepend: dirname(command) };
+    }
+  }
+
+  return null;
+}
+
+async function resolveNativeCompilerExecutable({
+  language,
+  command,
+  cwd,
+  timeoutMs,
+}: {
+  language: NativeLanguage;
+  command: string;
+  cwd: string;
+  timeoutMs: number;
+}): Promise<{ command: string; envPathPrepend?: string }> {
+  if (!isWindowsCompilerFallbackCandidate(language, command)) {
+    return { command };
+  }
+
+  try {
+    await runProcess({
+      command,
+      args: ["--version"],
+      cwd,
+      timeoutMs: Math.min(timeoutMs || 2000, 2000),
+    });
+    return { command };
+  } catch (error) {
+    if (!shouldTryWindowsCompilerFallback(language, command, error)) {
+      throw error;
+    }
+
+    const fallback =
+      language === "c" || language === "cpp"
+        ? await getWindowsCompilerFallback(language)
+        : null;
+    if (!fallback) {
+      throw error;
+    }
+
+    return fallback;
+  }
+}
+
 async function runProcess({
   command,
   args,
   cwd,
   timeoutMs,
+  env,
+  envPathPrepend,
   inputText,
   inputStream,
   stdoutStream,
@@ -394,13 +518,34 @@ async function runProcess({
   return await new Promise((resolvePromise, rejectPromise) => {
     const startedAt = performance.now();
     const useProcessGroup = process.platform !== "win32";
-    const child = spawn(command, args, {
-      cwd,
-      env: process.env,
-      windowsHide: true,
-      detached: useProcessGroup,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    const processEnv = env ?? process.env;
+    const spawnEnv = envPathPrepend
+      ? {
+          ...processEnv,
+          PATH: `${envPathPrepend}${process.platform === "win32" ? ";" : ":"}${processEnv.PATH ?? ""}`,
+        }
+      : processEnv;
+    let child: ReturnType<typeof spawn>;
+
+    try {
+      child = spawn(command, args, {
+        cwd,
+        env: spawnEnv,
+        windowsHide: true,
+        detached: useProcessGroup,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch (error) {
+      rejectPromise(
+        new Error(
+          getCommandStartFailureMessage(
+            command,
+            error as NodeJS.ErrnoException,
+          ),
+        ),
+      );
+      return;
+    }
 
     let stdout = "";
     let stderr = "";
@@ -452,15 +597,13 @@ async function runProcess({
     child.once("error", (error) => {
       terminateChild();
       finish(() => {
-        const errorWithCode = error as NodeJS.ErrnoException;
-
-        if (errorWithCode.code === "ENOENT") {
-          rejectPromise(new Error(getCommandNotFoundMessage(command)));
-          return;
-        }
-
         rejectPromise(
-          new Error(`Failed to start "${command}": ${error.message}`),
+          new Error(
+            getCommandStartFailureMessage(
+              command,
+              error as NodeJS.ErrnoException,
+            ),
+          ),
         );
       });
     });
@@ -751,16 +894,26 @@ async function prepareNativeExecution({
   if (compileParts.length === 0) {
     throw new Error(`Invalid compile command for ${language}.`);
   }
+  const compileExecutable = await resolveNativeCompilerExecutable({
+    language,
+    command: compileParts[0],
+    cwd,
+    timeoutMs,
+  });
 
   const sourceSignature = await getSourceSignature(entryPath, language);
   const sourceFiles = await getCompilationSourceFiles(entryPath, language);
+  const effectiveCompileCommand = [
+    compileExecutable.command,
+    ...compileParts.slice(1),
+  ].join(" ");
   const artifactDir = useCache
     ? join(
         await getCacheBaseDir(cwd, config),
         buildCacheKey({
           entryPath,
           sourceSignature,
-          compileCommand,
+          compileCommand: effectiveCompileCommand,
         }),
       )
     : await mkdtemp(join(tmpdir(), "exvex-native-"));
@@ -795,14 +948,26 @@ async function prepareNativeExecution({
     const compileArgs =
       language === "go"
         ? [...compileParts.slice(1), "-o", artifactPath, compileTarget]
-        : [...compileParts.slice(1), compileTarget, "-o", artifactPath];
+        : language === "c" || language === "cpp"
+          ? [
+              ...compileParts.slice(1),
+              compileTarget,
+              "-o",
+              artifactPath,
+              "-D",
+              "DEBUG",
+              "-D",
+              "CPH",
+            ]
+          : [...compileParts.slice(1), compileTarget, "-o", artifactPath];
     let compileResult: ProcessRunResult;
     try {
       compileResult = await runProcess({
-        command: compileParts[0],
+        command: compileExecutable.command,
         args: compileArgs,
         cwd: compileCwd,
         timeoutMs,
+        envPathPrepend: compileExecutable.envPathPrepend,
       });
     } finally {
       if (stagedGoSourceDir) {
@@ -819,7 +984,7 @@ async function prepareNativeExecution({
       throw new Error(
         getProcessFailureMessage(
           `Compilation (${language})`,
-          [compileParts[0], ...compileArgs],
+          [compileExecutable.command, ...compileArgs],
           compileResult,
         ),
       );
@@ -830,6 +995,7 @@ async function prepareNativeExecution({
     command: [artifactPath],
     artifactPath,
     cleanupPath: useCache ? undefined : artifactDir,
+    envPathPrepend: compileExecutable.envPathPrepend,
   };
 }
 
@@ -1312,6 +1478,8 @@ export async function runFile(request: RunRequest): Promise<RunResult> {
       args: execution.command.slice(1),
       cwd,
       timeoutMs,
+      env: getRuntimeEnvironment(),
+      envPathPrepend: execution.envPathPrepend,
       inputText,
       inputStream: inputText === undefined ? request.stdin : null,
       stdoutStream: request.stdout,

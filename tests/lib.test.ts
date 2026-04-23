@@ -28,6 +28,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
+const hasCpp = hasUsableCppToolchain();
 const hasGo = commandExists("go");
 const hasRustc = hasUsableRustToolchain();
 const hasJava = commandExists("javac") && commandExists("java");
@@ -62,6 +63,29 @@ function hasUsableRustToolchain() {
     execFileSync("rustc", ["-O", sourcePath, "-o", binaryPath], {
       stdio: "ignore",
     });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true });
+  }
+}
+
+function hasUsableCppToolchain() {
+  if (!commandExists("g++", ["--version"])) {
+    return false;
+  }
+
+  const probeDir = mkdtempSync(join(tmpdir(), "exvex-cpp-probe-"));
+  const sourcePath = join(probeDir, "probe.cpp");
+  const binaryPath = join(
+    probeDir,
+    process.platform === "win32" ? "probe.exe" : "probe",
+  );
+
+  try {
+    writeFileSync(sourcePath, "int main() { return 0; }\n");
+    execFileSync("g++", [sourcePath, "-o", binaryPath], { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -1797,6 +1821,57 @@ describe("runFile", () => {
       `Required command not found: "${missingCompiler}". Verify the path exists or use a PATH command such as "g++" in exvex.config.json.`,
     );
   });
+
+  it("exposes CPH-compatible runtime environment variables", async () => {
+    const directory = await createTempDir("exvex-cph-runtime-env-");
+
+    await writeFile(
+      join(directory, "main.js"),
+      "console.log(`${process.env.DEBUG}:${process.env.CPH}`);\n",
+    );
+
+    const result = await runFile({
+      cwd: directory,
+      entryFile: "main.js",
+      timeoutMs: 1000,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe("true:true");
+  });
+
+  it.skipIf(!hasCpp)(
+    "defines CPH-compatible C++ compile macros",
+    async () => {
+      const directory = await createTempDir("exvex-cph-cpp-macros-");
+
+      await writeFile(
+        join(directory, "main.cpp"),
+        [
+          "#include <iostream>",
+          "int main() {",
+          "#if defined(DEBUG) && defined(CPH)",
+          '  std::cout << "macros-ok\\n";',
+          "#else",
+          '  std::cout << "macros-missing\\n";',
+          "#endif",
+          "}",
+          "",
+        ].join("\n"),
+      );
+
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "main.cpp",
+        timeoutMs: 10000,
+        useCache: false,
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.trim()).toBe("macros-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
 });
 
 describe("runStress", () => {

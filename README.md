@@ -199,6 +199,8 @@ Create `exvex.config.json` in the working directory to override defaults:
 
 Config command values are tokenized directly by exvex. Keep them as executable-plus-arguments strings such as `"python3"` or `"g++ -O2 -std=c++20"`, not shell pipelines or shell-only syntax. Prefer PATH-based commands such as `"g++ -O2 -std=c++17"` when possible; only use an absolute compiler path when that path is stable on your machine.
 
+On Windows, exvex first uses the configured `gcc`/`g++` from `PATH`, matching common editor runners. If a bare `gcc`/`g++` command is present but cannot start, exvex falls back to common MSYS2 locations (`C:/msys64/ucrt64/bin`, `C:/msys64/mingw64/bin`, then `C:/msys64/clang64/bin`) and prepends that directory while running the compiled executable so required DLLs are available. Explicit compiler paths never fall back.
+
 ## Sample Directory Layout
 
 ```text
