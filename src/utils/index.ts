@@ -273,6 +273,40 @@ export function splitCommand(command: string) {
     tokens.push(current);
   }
 
+  if (tokens.length > 1 && /^[A-Za-z]:\\/.test(tokens[0]!)) {
+    const mergedTokens: string[] = [];
+    let index = 0;
+
+    while (index < tokens.length) {
+      let token = tokens[index]!;
+
+      if (
+        mergedTokens.length === 0 &&
+        /^[A-Za-z]:\\/.test(token) &&
+        !/\.(?:exe|cmd|bat|com|ps1)$/i.test(token)
+      ) {
+        let merged = token;
+        let lookaheadIndex = index;
+
+        while (lookaheadIndex + 1 < tokens.length) {
+          merged += ` ${tokens[lookaheadIndex + 1]!}`;
+          lookaheadIndex += 1;
+
+          if (/\.(?:exe|cmd|bat|com|ps1)$/i.test(merged)) {
+            token = merged;
+            index = lookaheadIndex;
+            break;
+          }
+        }
+      }
+
+      mergedTokens.push(token);
+      index += 1;
+    }
+
+    return mergedTokens;
+  }
+
   return tokens;
 }
 

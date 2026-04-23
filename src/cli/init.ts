@@ -2,7 +2,6 @@ import { mkdir, readFile, stat, writeFile } from "fs/promises";
 import { basename, dirname, extname, isAbsolute, join, normalize } from "path";
 import type { SupportedLanguage } from "../interface";
 import {
-  formatArg,
   formatRunCommand,
   formatStressCommand,
   formatTestCommand,

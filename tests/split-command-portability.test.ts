@@ -30,6 +30,15 @@ describe("splitCommand cross-platform behavior", () => {
       expected: ["C:\\Program Files\\Python\\python.exe", "-V"],
     },
     {
+      name: "preserves unquoted Windows executable path with spaces",
+      input: "C:\\Program Files\\nodejs\\node.exe C:\\tmp\\tool.js --flag",
+      expected: [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\tmp\\tool.js",
+        "--flag",
+      ],
+    },
+    {
       name: "parses escaped spaces in Windows path",
       input: "C:\\Program\\ Files\\Python\\python.exe -V",
       expected: ["C:\\Program Files\\Python\\python.exe", "-V"],
