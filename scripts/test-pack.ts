@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 interface PackageManifest {
   bin?: string | Record<string, string>;
   dependencies?: Record<string, string>;
+  version?: string;
 }
 
 const execFile = promisify(execFileCallback);
@@ -17,24 +18,30 @@ const distEntryPath = join(rootDir, "dist/index.js");
 let tarballPath: string | undefined;
 let installDir: string | undefined;
 
-function formatWindowsCmdArg(value: string) {
-  return /[\s"]/u.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+function getNpmCliPath() {
+  const npmCliPath = process.env.npm_execpath;
+
+  assert.ok(
+    npmCliPath,
+    "npm_execpath is required to run package-manager checks.",
+  );
+
+  return npmCliPath;
 }
 
-async function runBun(args: string[], cwd: string) {
-  if (process.platform === "win32") {
-    const commandLine = ["bun", ...args].map(formatWindowsCmdArg).join(" ");
-    return await execFile("cmd.exe", ["/d", "/s", "/c", commandLine], { cwd });
-  }
+async function runNpm(args: string[], cwd: string) {
+  return await execFile(process.execPath, [getNpmCliPath(), ...args], { cwd });
+}
 
-  return await execFile("bun", args, { cwd });
+async function installTarball(tarballPath: string, cwd: string) {
+  return await runNpm(["install", "--no-save", tarballPath], cwd);
 }
 
 try {
   try {
     await access(distEntryPath);
   } catch {
-    await runBun(["run", "build"], rootDir);
+    await runNpm(["run", "build"], rootDir);
   }
 
   const packMetadata = await readFile(packMetadataPath, "utf8");
@@ -67,7 +74,7 @@ try {
     '{\n  "name": "exvex-pack-check",\n  "private": true\n}\n',
     "utf8",
   );
-  await runBun(["add", tarballPath], installDir);
+  await installTarball(tarballPath, installDir);
 
   const packagedRootDir = join(installDir, "node_modules", "exvex");
   const packageJson = JSON.parse(
@@ -102,6 +109,17 @@ try {
     { cwd: packagedRootDir },
   );
   assert.match(stdout, /Usage:/, "Packed CLI help output is missing Usage.");
+
+  const { stdout: versionStdout } = await execFile(
+    process.execPath,
+    [packagedDistEntryPath, "--version"],
+    { cwd: packagedRootDir },
+  );
+  assert.equal(
+    versionStdout.trim(),
+    packageJson.version,
+    "Packed CLI version must match the published manifest version.",
+  );
 
   process.stdout.write("Packed tarball checks passed.\n");
 } finally {

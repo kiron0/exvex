@@ -17,6 +17,7 @@
     "test:fresh-install": "jiti scripts/test-fresh-install.ts",
     "test:smoke": "node dist/index.js --help",
     "test:e2e:live": "vitest run tests/live-e2e.test.ts",
+    "prepack": "npm run build && npm run check:dist-version",
     "prepublishOnly": "npm run build && npm run check:dist-version",
     "build:watch": "tsup --watch",
     "format": "prettier --write \"**/*.{ts,json,md}\""
