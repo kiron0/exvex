@@ -97,7 +97,7 @@ exvex test --input-dir=input.txt --output-dir=output.txt
 
 Judge mode supports two sample layouts:
 
-- Directory mode: `input/1.txt` pairs with `output/1.txt`
+- Directory mode: `input/1.txt` pairs with `output/1.txt`; each paired file can also contain multiple cases separated by a line containing only `---`
 - Single-file mode: `input.txt` pairs with `output.txt`, with each case separated by a line containing only `---`
 
 Single-file mode is auto-detected when default `input/` and `output/` directories do not exist and `input.txt` plus `output.txt` do exist. If both layouts exist, directory mode wins by default. Explicit `--input-dir` and `--output-dir` paths always win, including file paths.
@@ -120,6 +120,8 @@ output.txt
 ---
 2
 ```
+
+Each matched input/output file pair can hold one case or multiple `---`-separated cases. Mixed layouts are valid, so `input/1.txt` can be one case while `input/2.txt` contains `2.1`, `2.2`, and so on.
 
 ### Stress test
 
@@ -244,6 +246,8 @@ problem/
     |-- 1.txt
     `-- 2.txt
 ```
+
+Each matched input/output file pair can hold one case or multiple `---`-separated cases. Mixed layouts are valid, so `input/1.txt` can be one case while `input/2.txt` contains `2.1`, `2.2`, and so on.
 
 ## Single-File Sample Layout
 

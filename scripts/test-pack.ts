@@ -19,14 +19,14 @@ let tarballPath: string | undefined;
 let installDir: string | undefined;
 
 function getNpmCliPath() {
-  const npmCliPath = process.env.npm_execpath;
+  const packageManagerExecPath = process.env.npm_execpath;
 
   assert.ok(
-    npmCliPath && !isBunExecPath(npmCliPath),
+    packageManagerExecPath && !isBunExecPath(packageManagerExecPath),
     "npm_execpath is required to run package-manager checks.",
   );
 
-  return npmCliPath;
+  return packageManagerExecPath;
 }
 
 async function runNpm(args: string[], cwd: string) {
@@ -37,17 +37,23 @@ function isBunExecPath(value: string) {
   return (
     basename(value)
       .toLowerCase()
-      .replace(/\.exe$/u, "") === "bun"
+      .replace(/\.(?:cmd|exe|ps1)$/u, "") === "bun"
   );
 }
 
-async function installTarball(tarballPath: string, cwd: string) {
+async function runPackageManager(args: string[], cwd: string) {
   const packageManagerExecPath = process.env.npm_execpath;
 
   if (packageManagerExecPath && isBunExecPath(packageManagerExecPath)) {
-    return await execFile(packageManagerExecPath, ["add", tarballPath], {
-      cwd,
-    });
+    return await execFile(packageManagerExecPath, args, { cwd });
+  }
+
+  return await runNpm(args, cwd);
+}
+
+async function installTarball(tarballPath: string, cwd: string) {
+  if (process.env.npm_execpath && isBunExecPath(process.env.npm_execpath)) {
+    return await runPackageManager(["add", tarballPath], cwd);
   }
 
   return await runNpm(["install", "--no-save", tarballPath], cwd);
@@ -57,7 +63,7 @@ try {
   try {
     await access(distEntryPath);
   } catch {
-    await runNpm(["run", "build"], rootDir);
+    await runPackageManager(["run", "build"], rootDir);
   }
 
   const packMetadata = await readFile(packMetadataPath, "utf8");

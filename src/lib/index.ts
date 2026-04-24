@@ -241,6 +241,7 @@ function splitInlineJudgeCases(content: string) {
 async function discoverInlineJudgeCases(
   inputPath: string,
   outputPath: string,
+  caseNamePrefix?: string,
 ): Promise<JudgeCase[]> {
   await ensureFileExists(inputPath, "Input file");
   await ensureFileExists(outputPath, "Output file");
@@ -265,7 +266,10 @@ async function discoverInlineJudgeCases(
   }
 
   return inputCases.map((inputText, index) => ({
-    name: String(index + 1),
+    name:
+      caseNamePrefix && inputCases.length > 1
+        ? `${caseNamePrefix}.${index + 1}`
+        : (caseNamePrefix ?? String(index + 1)),
     inputPath,
     outputPath,
     inputText,
@@ -1726,11 +1730,17 @@ export async function discoverJudgeCases({
     );
   }
 
-  return sortCaseNames(matchedCases).map((name) => ({
-    name,
-    inputPath: join(resolvedInputDir, `${name}.txt`),
-    outputPath: outputByBaseName.get(name)!,
-  }));
+  const cases = await Promise.all(
+    sortCaseNames(matchedCases).map((name) =>
+      discoverInlineJudgeCases(
+        join(resolvedInputDir, `${name}.txt`),
+        outputByBaseName.get(name)!,
+        name,
+      ),
+    ),
+  );
+
+  return cases.flat();
 }
 
 export async function runJudge({

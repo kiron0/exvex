@@ -814,6 +814,71 @@ describe("runJudge", () => {
     );
   });
 
+  it("supports multiple judge cases inside input/ and output/ files", async () => {
+    const directory = await createTempDir("exvex-judge-dir-inline-");
+
+    await writeFile(
+      join(directory, "main.js"),
+      [
+        "const fs = require('node:fs');",
+        "const value = Number(fs.readFileSync(0, 'utf8').trim());",
+        "console.log(String(value * 2));",
+      ].join("\n"),
+    );
+    await mkdir(join(directory, "input"));
+    await mkdir(join(directory, "output"));
+    await writeFile(join(directory, "input", "1.txt"), "21\n---\n7\n");
+    await writeFile(join(directory, "output", "1.txt"), "42\n---\n14\n");
+
+    const summary = await runJudge({
+      cwd: directory,
+      entryFile: "main.js",
+    });
+
+    expect(summary.passed).toBe(2);
+    expect(summary.failed).toBe(0);
+    expect(summary.total).toBe(2);
+    expect(summary.cases[0]?.name).toBe("1.1");
+    expect(summary.cases[1]?.name).toBe("1.2");
+    expect(summary.cases[0]?.inputPath).toBe(join(directory, "input", "1.txt"));
+    expect(summary.cases[0]?.outputPath).toBe(
+      join(directory, "output", "1.txt"),
+    );
+  });
+
+  it("supports mixed single and split judge files inside input/ and output/", async () => {
+    const directory = await createTempDir("exvex-judge-dir-mixed-inline-");
+
+    await writeFile(
+      join(directory, "main.js"),
+      [
+        "const fs = require('node:fs');",
+        "const value = Number(fs.readFileSync(0, 'utf8').trim());",
+        "console.log(String(value * 2));",
+      ].join("\n"),
+    );
+    await mkdir(join(directory, "input"));
+    await mkdir(join(directory, "output"));
+    await writeFile(join(directory, "input", "1.txt"), "3\n");
+    await writeFile(join(directory, "output", "1.txt"), "6\n");
+    await writeFile(join(directory, "input", "2.txt"), "21\n---\n7\n");
+    await writeFile(join(directory, "output", "2.txt"), "42\n---\n14\n");
+
+    const summary = await runJudge({
+      cwd: directory,
+      entryFile: "main.js",
+    });
+
+    expect(summary.passed).toBe(3);
+    expect(summary.failed).toBe(0);
+    expect(summary.total).toBe(3);
+    expect(summary.cases.map((testCase) => testCase.name)).toEqual([
+      "1",
+      "2.1",
+      "2.2",
+    ]);
+  });
+
   it("uses input.txt and output.txt next to explicit entry files by default", async () => {
     const directory = await createTempDir("exvex-judge-entry-file-");
     const problemDir = join(directory, "a");
@@ -1042,6 +1107,23 @@ describe("runJudge", () => {
     await writeFile(join(directory, "main.js"), "console.log('ok');\n");
     await writeFile(join(directory, "input.txt"), "1\n---\n2\n");
     await writeFile(join(directory, "output.txt"), "ok\n");
+
+    await expect(
+      runJudge({
+        cwd: directory,
+        entryFile: "main.js",
+      }),
+    ).rejects.toThrow("Judge case files are incomplete");
+  });
+
+  it("fails fast when directory judge file splits are not fully paired", async () => {
+    const directory = await createTempDir("exvex-judge-dir-inline-mismatch-");
+
+    await writeFile(join(directory, "main.js"), "console.log('ok');\n");
+    await mkdir(join(directory, "input"));
+    await mkdir(join(directory, "output"));
+    await writeFile(join(directory, "input", "1.txt"), "1\n---\n2\n");
+    await writeFile(join(directory, "output", "1.txt"), "ok\n");
 
     await expect(
       runJudge({
