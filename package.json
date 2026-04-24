@@ -1,13 +1,14 @@
 {
   "name": "exvex",
   "description": "Run, judge, and stress-test competitive programming solutions from one CLI.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "bin": {
     "exvex": "dist/index.js"
   },
   "scripts": {
     "build": "tsup",
+    "check:dist-version": "jiti scripts/check-dist-version.ts",
     "test": "vitest run",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -16,6 +17,7 @@
     "test:fresh-install": "jiti scripts/test-fresh-install.ts",
     "test:smoke": "node dist/index.js --help",
     "test:e2e:live": "vitest run tests/live-e2e.test.ts",
+    "prepublishOnly": "npm run build && npm run check:dist-version",
     "build:watch": "tsup --watch",
     "format": "prettier --write \"**/*.{ts,json,md}\""
   },
