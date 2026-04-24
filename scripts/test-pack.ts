@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile as execFileCallback } from "node:child_process";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -22,7 +22,7 @@ function getNpmCliPath() {
   const npmCliPath = process.env.npm_execpath;
 
   assert.ok(
-    npmCliPath,
+    npmCliPath && !isBunExecPath(npmCliPath),
     "npm_execpath is required to run package-manager checks.",
   );
 
@@ -33,7 +33,17 @@ async function runNpm(args: string[], cwd: string) {
   return await execFile(process.execPath, [getNpmCliPath(), ...args], { cwd });
 }
 
+function isBunExecPath(value: string) {
+  return basename(value).toLowerCase().replace(/\.exe$/u, "") === "bun";
+}
+
 async function installTarball(tarballPath: string, cwd: string) {
+  const packageManagerExecPath = process.env.npm_execpath;
+
+  if (packageManagerExecPath && isBunExecPath(packageManagerExecPath)) {
+    return await execFile(packageManagerExecPath, ["add", tarballPath], { cwd });
+  }
+
   return await runNpm(["install", "--no-save", tarballPath], cwd);
 }
 
