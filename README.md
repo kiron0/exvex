@@ -7,7 +7,7 @@
 
 It gives you one local workflow for the repetitive parts of problem solving: run a solution from source, check it against sample cases, and compare it against a brute-force implementation when you need stress testing.
 
-exvex is built for competitive programmers who switch between languages and want faster feedback than a pile of ad hoc shell commands, compiler invocations, and one-off scripts.
+**exvex** is built for competitive programmers who switch between languages and want faster feedback than a pile of ad hoc shell commands, compiler invocations, and one-off scripts.
 
 ## Features
 
@@ -18,21 +18,21 @@ exvex is built for competitive programmers who switch between languages and want
 - Judge `input/*.txt` against `output/*.txt`
 - Judge multi-case `input.txt` against `output.txt` with `---` separators
 - Stress test a solution against a brute-force implementation
-- Scaffold ready-to-use workspaces with `exvex init`
+- Scaffold ready-to-use workspaces with `npx exvex init`
 - Customize compiler commands and defaults with `exvex.config.json`
 - Emit structured `--json` output for editor and CI integrations
 - Prompt interactively when launched in a TTY without arguments, including optional `--json`
 
-## Installation
-
-```bash
-npm install -g exvex
-```
-
-Or run it without a global install:
+## Quick Start
 
 ```bash
 npx exvex --help
+```
+
+Run any command the same way:
+
+```bash
+npx exvex test
 ```
 
 Node.js 18 or newer is required.
@@ -42,34 +42,34 @@ Node.js 18 or newer is required.
 ### Run a file
 
 ```bash
-exvex main.cpp
-exvex script.py --input=sample.txt
-exvex script.py --input sample.txt
-exvex solution.java --timeout=3000
-exvex solution.java --timeout 3000
+npx exvex main.cpp
+npx exvex script.py --input=sample.txt
+npx exvex script.py --input sample.txt
+npx exvex solution.java --timeout=3000
+npx exvex solution.java --timeout 3000
 ```
 
-When you run `exvex` with no arguments in an interactive terminal, it prompts for mode, required files, timeout, cache choice, and optional JSON output.
+When you run `npx exvex` with no arguments in an interactive terminal, it prompts for mode, required files, timeout, cache choice, and optional JSON output.
 
 ### Initialize a workspace
 
 ```bash
-exvex init
-exvex init cpp
-exvex init python --preset=run
-exvex init python --run
-exvex init cpp --stress
-exvex init cpp --test --yes
-exvex init java --preset=stress --force
-exvex init cpp --json
-exvex init cpp --contest --vscode --gitignore
-exvex init cpp --input-dir=samples/in --output-dir=samples/out
+npx exvex init
+npx exvex init cpp
+npx exvex init python --preset=run
+npx exvex init python --run
+npx exvex init cpp --stress
+npx exvex init cpp --test --yes
+npx exvex init java --preset=stress --force
+npx exvex init cpp --json
+npx exvex init cpp --contest --vscode --gitignore
+npx exvex init cpp --input-dir=samples/in --output-dir=samples/out
 ```
 
-`exvex init` scaffolds starter files so users do not need to hand-create `main.*`, sample files, or stress-test files.
+`npx exvex init` scaffolds starter files so users do not need to hand-create `main.*`, sample files, or stress-test files.
 
 - Default preset is `test`
-- Bare `exvex init` in an interactive terminal opens a wizard
+- Bare `npx exvex init` in an interactive terminal opens a wizard
 - `test` preset creates `main.*`, `input.txt`, and `output.txt` by default
 - `stress` preset creates `solution.*`, `brute.*`, and `gen.*`
 - `--run`, `--test`, and `--stress` are shortcuts for `--preset=...`
@@ -86,14 +86,14 @@ exvex init cpp --input-dir=samples/in --output-dir=samples/out
 ### Judge sample cases
 
 ```bash
-exvex test
-exvex test main.cpp
-exvex test --input-dir=samples/in --output-dir=samples/out
-exvex test --input-dir samples/in --output-dir samples/out
-exvex test --input-dir=input.txt --output-dir=output.txt
+npx exvex test
+npx exvex test main.cpp
+npx exvex test --input-dir=samples/in --output-dir=samples/out
+npx exvex test --input-dir samples/in --output-dir samples/out
+npx exvex test --input-dir=input.txt --output-dir=output.txt
 ```
 
-`exvex test` auto-detects an entry file in the current directory by preferring a single `main.*` file and otherwise requiring exactly one supported source file.
+`npx exvex test` auto-detects an entry file in the current directory by preferring a single `main.*` file and otherwise requiring exactly one supported source file.
 
 Judge mode supports two sample layouts:
 
@@ -126,10 +126,10 @@ Each matched input/output file pair can hold one case or multiple `---`-separate
 ### Stress test
 
 ```bash
-exvex stress solution.cpp brute.cpp gen.cpp
-exvex stress solution.py brute.py gen.py --iterations=500 --timeout=2000
-exvex stress solution.py brute.py gen.py --iterations 500 --timeout 2000
-exvex stress solution.py brute.py gen.py --json
+npx exvex stress solution.cpp brute.cpp gen.cpp
+npx exvex stress solution.py brute.py gen.py --iterations=500 --timeout=2000
+npx exvex stress solution.py brute.py gen.py --iterations 500 --timeout 2000
+npx exvex stress solution.py brute.py gen.py --json
 ```
 
 All long options support both forms: `--option=value` and `--option value`.
@@ -137,9 +137,9 @@ All long options support both forms: `--option=value` and `--option value`.
 To pass a positional filename that starts with `-`, stop option parsing first:
 
 ```bash
-exvex -- --help
-exvex test -- --main.py
-exvex stress -- --solution.py --brute.py --gen.py
+npx exvex -- --help
+npx exvex test -- --main.py
+npx exvex stress -- --solution.py --brute.py --gen.py
 ```
 
 On first mismatch or runtime failure, exvex writes failing input, both outputs, and `metadata.json` to `.exvex/stress/`. Set `stressArtifactMode` to `"timestamp"` if you want each failure preserved in its own directory instead of overwriting latest one.
@@ -181,7 +181,7 @@ On first mismatch or runtime failure, exvex writes failing input, both outputs, 
 - Stress failures also write `metadata.json` with iteration number, failure reason, and summary message
 - JSON error output includes structured codes for parse, config, and missing-toolchain failures
 - Extensionless files work when exvex can detect language from a shebang or recognizable source pattern
-- `exvex init` defaults to a C++ sample-judge scaffold when run non-interactively with no extra flags
+- `npx exvex init` defaults to a C++ sample-judge scaffold when run non-interactively with no extra flags
 - init language defaults to `cpp`; init preset defaults to `test`
 - Generated VS Code tasks reuse normalized scaffold paths, so inputs like `./samples\\in` become stable `samples/in` task arguments
 - `retainTempArtifactsOnSuccess` and `retainTempArtifactsOnFailure` control whether `--no-cache` build artifacts are kept
