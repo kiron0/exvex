@@ -178,6 +178,34 @@ export function detectLanguageFromPath(
   return LANGUAGE_EXTENSIONS[extname(filePath).toLowerCase()] ?? null;
 }
 
+const EXTENSIONLESS_WINDOWS_COMMAND_NAMES = new Set([
+  "clang",
+  "clang++",
+  "g++",
+  "gcc",
+  "go",
+  "java",
+  "javac",
+  "kotlinc",
+  "node",
+  "php",
+  "python",
+  "python3",
+  "ruby",
+  "rustc",
+]);
+
+function isWindowsExecutablePathToken(value: string) {
+  if (/\.(?:exe|cmd|bat|com|ps1)$/i.test(value)) {
+    return true;
+  }
+
+  const commandName = value.split(/[\\/]/).at(-1)?.toLowerCase();
+  return commandName
+    ? EXTENSIONLESS_WINDOWS_COMMAND_NAMES.has(commandName)
+    : false;
+}
+
 export function splitCommand(command: string) {
   const trimmed = command.trim();
 
@@ -283,7 +311,7 @@ export function splitCommand(command: string) {
       if (
         mergedTokens.length === 0 &&
         /^[A-Za-z]:\\/.test(token) &&
-        !/\.(?:exe|cmd|bat|com|ps1)$/i.test(token)
+        !isWindowsExecutablePathToken(token)
       ) {
         let merged = token;
         let lookaheadIndex = index;
@@ -292,7 +320,7 @@ export function splitCommand(command: string) {
           merged += ` ${tokens[lookaheadIndex + 1]!}`;
           lookaheadIndex += 1;
 
-          if (/\.(?:exe|cmd|bat|com|ps1)$/i.test(merged)) {
+          if (isWindowsExecutablePathToken(merged)) {
             token = merged;
             index = lookaheadIndex;
             break;

@@ -1267,6 +1267,22 @@ describe("runCli", () => {
     expect(logger.error).not.toHaveBeenCalled();
   });
 
+  it("classifies unsafe numeric JSON errors as parse errors", async () => {
+    const { dependencies, logger } = createDependencies();
+
+    await expect(
+      runCli(["main.js", "--timeout=9007199254740992", "--json"], dependencies),
+    ).resolves.toBe(1);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"code": "ARG_PARSE_ERROR"'),
+    );
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining('"message": "--timeout must be a safe integer."'),
+    );
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
   it("classifies unexpected extra arguments as JSON parse errors", async () => {
     const { dependencies, logger } = createDependencies();
 

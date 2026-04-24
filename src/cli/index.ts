@@ -1449,6 +1449,7 @@ function getJsonErrorCode(message: string) {
     message.includes("Unexpected argument:") ||
     message.includes("must not be empty") ||
     message.includes("must be an integer") ||
+    message.includes("must be a safe integer") ||
     message.includes("must be at least") ||
     message.includes("requires exactly three files") ||
     message.includes("An entry file is required.") ||

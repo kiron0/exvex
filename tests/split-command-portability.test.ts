@@ -39,6 +39,11 @@ describe("splitCommand cross-platform behavior", () => {
       ],
     },
     {
+      name: "preserves unquoted extensionless Windows tool path with spaces",
+      input: "C:\\Program Files\\LLVM\\bin\\clang++ -O2",
+      expected: ["C:\\Program Files\\LLVM\\bin\\clang++", "-O2"],
+    },
+    {
       name: "parses escaped spaces in Windows path",
       input: "C:\\Program\\ Files\\Python\\python.exe -V",
       expected: ["C:\\Program Files\\Python\\python.exe", "-V"],
