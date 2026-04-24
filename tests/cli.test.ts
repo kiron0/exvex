@@ -1829,6 +1829,23 @@ describe("initProject", () => {
     }
   });
 
+  it("rejects current-directory scaffold paths", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-current-dir-path-"));
+
+    try {
+      await expect(
+        initProject({
+          cwd,
+          language: "cpp",
+          preset: "test",
+          inputDir: ".",
+        }),
+      ).rejects.toThrow("Input path must not be empty.");
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("rejects test scaffold when input path parent is a file", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "exvex-init-input-parent-"));
     writeFileSync(join(cwd, "input.txt"), "occupied\n");

@@ -174,6 +174,14 @@ async function isFile(path: string) {
   }
 }
 
+async function isDirectory(path: string) {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 async function ensureFileExists(path: string, label: string) {
   if (!(await pathExists(path))) {
     throw new Error(`${label} not found: ${path}`);
@@ -1642,15 +1650,19 @@ export async function discoverJudgeCases({
   const resolvedOutputDir = resolveFrom(cwd, outputDir);
   const inputIsFile = await isFile(resolvedInputDir);
   const outputIsFile = await isFile(resolvedOutputDir);
+  const inputIsDirectory = await isDirectory(resolvedInputDir);
+  const outputIsDirectory = await isDirectory(resolvedOutputDir);
+  const usesSingleFilePath =
+    resolvedInputDir.endsWith(".txt") || resolvedOutputDir.endsWith(".txt");
 
-  if (inputIsFile || outputIsFile) {
-    if (inputIsFile && !outputIsFile) {
+  if (inputIsFile || outputIsFile || usesSingleFilePath) {
+    if (inputIsFile && outputIsDirectory) {
       throw new Error(
         `Input directory must be a directory: ${resolvedInputDir}`,
       );
     }
 
-    if (!inputIsFile && outputIsFile) {
+    if (inputIsDirectory && outputIsFile) {
       throw new Error(
         `Output directory must be a directory: ${resolvedOutputDir}`,
       );

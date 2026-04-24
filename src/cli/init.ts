@@ -113,6 +113,10 @@ function normalizeRelativePath(value: string, fieldName: string) {
     .split(/[\\/]+/)
     .filter((segment) => segment !== ".");
 
+  if (segments.length === 0) {
+    throw new Error(`${fieldName} must not be empty.`);
+  }
+
   if (segments.some((segment) => segment === "..")) {
     throw new Error(`${fieldName} must stay inside current directory.`);
   }

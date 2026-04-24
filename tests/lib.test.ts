@@ -1173,6 +1173,36 @@ describe("runJudge", () => {
       }),
     ).rejects.toThrow("Input directory must be a directory");
   });
+
+  it("rejects missing paired single-file judge output with clear errors", async () => {
+    const directory = await createTempDir("exvex-judge-missing-output-file-");
+
+    await writeFile(join(directory, "main.js"), "console.log('ok');\n");
+    await writeFile(join(directory, "input.txt"), "1\n");
+
+    await expect(
+      runJudge({
+        cwd: directory,
+        entryFile: "main.js",
+      }),
+    ).rejects.toThrow("Output file not found");
+  });
+
+  it("rejects missing explicit single-file judge input with clear errors", async () => {
+    const directory = await createTempDir("exvex-judge-missing-input-file-");
+
+    await writeFile(join(directory, "main.js"), "console.log('ok');\n");
+    await writeFile(join(directory, "answer.txt"), "ok\n");
+
+    await expect(
+      runJudge({
+        cwd: directory,
+        entryFile: "main.js",
+        inputDir: "case.txt",
+        outputDir: "answer.txt",
+      }),
+    ).rejects.toThrow("Input file not found");
+  });
 });
 
 describe("runFile", () => {
