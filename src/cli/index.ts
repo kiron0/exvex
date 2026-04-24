@@ -675,6 +675,10 @@ function parseIntegerOption(
 
   const parsed = Number(value);
 
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`${optionName} must be a safe integer.`);
+  }
+
   if (parsed < min) {
     throw new Error(`${optionName} must be at least ${min}.`);
   }

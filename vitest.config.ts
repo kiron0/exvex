@@ -7,6 +7,7 @@ export default defineConfig({
       "tests/cli.test.ts",
       "tests/lib.test.ts",
       "tests/split-command-portability.test.ts",
+      "tests/utils.test.ts",
     ],
   },
 });

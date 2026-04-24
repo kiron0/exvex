@@ -103,7 +103,7 @@ function assertNonNegativeInteger(
     return;
   }
 
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     throw new Error(`Invalid config: "${key}" must be a non-negative integer.`);
   }
 }

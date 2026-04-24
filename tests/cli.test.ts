@@ -519,6 +519,21 @@ describe("parseCliArgs", () => {
     ).toThrow("--iterations must be at least 1.");
   });
 
+  it("rejects unsafe numeric option values", () => {
+    expect(() =>
+      parseCliArgs(["main.cpp", "--timeout=9007199254740992"]),
+    ).toThrow("--timeout must be a safe integer.");
+    expect(() =>
+      parseCliArgs([
+        "stress",
+        "solution.js",
+        "brute.js",
+        "gen.js",
+        "--iterations=9007199254740992",
+      ]),
+    ).toThrow("--iterations must be a safe integer.");
+  });
+
   it("supports -- to end option parsing", () => {
     expect(parseCliArgs(["--", "--input"])).toEqual({
       help: false,

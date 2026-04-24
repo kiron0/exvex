@@ -207,13 +207,13 @@ async function ensureDirectoryExists(path: string, label: string) {
 }
 
 function ensureNonNegativeInteger(value: number, label: string) {
-  if (!Number.isInteger(value) || value < 0) {
+  if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error(`${label} must be a non-negative integer.`);
   }
 }
 
 function ensurePositiveInteger(value: number, label: string) {
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${label} must be a positive integer.`);
   }
 }

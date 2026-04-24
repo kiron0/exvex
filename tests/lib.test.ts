@@ -306,6 +306,10 @@ describe("loadConfig", () => {
       'Invalid config: "timeout" must be a non-negative integer.',
     ],
     [
+      { timeout: Number.MAX_SAFE_INTEGER + 1 },
+      'Invalid config: "timeout" must be a non-negative integer.',
+    ],
+    [
       { javascript: "" },
       'Invalid config: "javascript" must be a non-empty string.',
     ],
@@ -2257,6 +2261,17 @@ describe("runStress", () => {
         bruteFile: "brute.js",
         generatorFile: "gen.js",
         iterations: 0,
+      }),
+    ).rejects.toThrow("iterations must be a positive integer.");
+  });
+
+  it("rejects unsafe iteration values", async () => {
+    await expect(
+      runStress({
+        solutionFile: "solution.js",
+        bruteFile: "brute.js",
+        generatorFile: "gen.js",
+        iterations: Number.MAX_SAFE_INTEGER + 1,
       }),
     ).rejects.toThrow("iterations must be a positive integer.");
   });
