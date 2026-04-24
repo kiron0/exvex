@@ -34,14 +34,20 @@ async function runNpm(args: string[], cwd: string) {
 }
 
 function isBunExecPath(value: string) {
-  return basename(value).toLowerCase().replace(/\.exe$/u, "") === "bun";
+  return (
+    basename(value)
+      .toLowerCase()
+      .replace(/\.exe$/u, "") === "bun"
+  );
 }
 
 async function installTarball(tarballPath: string, cwd: string) {
   const packageManagerExecPath = process.env.npm_execpath;
 
   if (packageManagerExecPath && isBunExecPath(packageManagerExecPath)) {
-    return await execFile(packageManagerExecPath, ["add", tarballPath], { cwd });
+    return await execFile(packageManagerExecPath, ["add", tarballPath], {
+      cwd,
+    });
   }
 
   return await runNpm(["install", "--no-save", tarballPath], cwd);
