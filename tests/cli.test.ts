@@ -120,7 +120,7 @@ function createDependencies(overrides: Partial<CliDependencies> = {}) {
       preset: "test" as const,
       createdPaths: ["main.cpp", "input.txt", "output.txt"],
       overwrittenPaths: [],
-      nextCommand: "exvex test main.cpp",
+      nextCommand: "npx exvex test main.cpp",
     })),
     promptForArgs: vi.fn(async () => null),
     promptForInitArgs: vi.fn(async () => null),
@@ -656,32 +656,32 @@ describe("getHelpText", () => {
 
 describe("command formatters", () => {
   it("formats leading-dash run entries with -- separator", () => {
-    expect(formatRunCommand("-solve.cpp")).toBe("exvex -- -solve.cpp");
+    expect(formatRunCommand("-solve.cpp")).toBe("npx exvex -- -solve.cpp");
   });
 
   it("formats shell-sensitive test paths deterministically", () => {
     expect(
       formatTestCommand("folder name/main.cpp", "samples in", "samples out"),
     ).toBe(
-      'exvex test --input-dir="samples in" --output-dir="samples out" "folder name/main.cpp"',
+      'npx exvex test --input-dir="samples in" --output-dir="samples out" "folder name/main.cpp"',
     );
   });
 
   it("omits default single-file sample paths from test commands", () => {
     expect(formatTestCommand("main.cpp", "input.txt", "output.txt")).toBe(
-      "exvex test main.cpp",
+      "npx exvex test main.cpp",
     );
   });
 
   it("escapes POSIX shell expansion characters in formatted commands", () => {
     const expectedRunCommand =
       process.platform === "win32"
-        ? 'exvex "main$HOME`pwd`.cpp"'
-        : 'exvex "main\\$HOME\\`pwd\\`.cpp"';
+        ? 'npx exvex "main$HOME`pwd`.cpp"'
+        : 'npx exvex "main\\$HOME\\`pwd\\`.cpp"';
     const expectedStressCommand =
       process.platform === "win32"
-        ? 'exvex stress "sol$1.cpp" brute.cpp gen.cpp'
-        : 'exvex stress "sol\\$1.cpp" brute.cpp gen.cpp';
+        ? 'npx exvex stress "sol$1.cpp" brute.cpp gen.cpp'
+        : 'npx exvex stress "sol\\$1.cpp" brute.cpp gen.cpp';
 
     expect(formatRunCommand("main$HOME`pwd`.cpp")).toBe(expectedRunCommand);
     expect(formatStressCommand("sol$1.cpp", "brute.cpp", "gen.cpp")).toBe(
@@ -692,7 +692,7 @@ describe("command formatters", () => {
   it("formats stress paths with -- when any positional path starts with dash", () => {
     expect(
       formatStressCommand("solution.cpp", "-brute.cpp", "gen file.cpp"),
-    ).toBe('exvex stress -- solution.cpp -brute.cpp "gen file.cpp"');
+    ).toBe('npx exvex stress -- solution.cpp -brute.cpp "gen file.cpp"');
   });
 });
 
@@ -1090,7 +1090,7 @@ describe("runCli", () => {
         preset: "test" as const,
         createdPaths: ["main.cpp", "input.txt", "output.txt"],
         overwrittenPaths: [],
-        nextCommand: "exvex test main.cpp",
+        nextCommand: "npx exvex test main.cpp",
       })),
     });
 
@@ -1113,7 +1113,7 @@ describe("runCli", () => {
     });
     expect(logger.log).toHaveBeenCalledWith("Created files:");
     expect(logger.log).toHaveBeenCalledWith("Next:");
-    expect(logger.log).toHaveBeenCalledWith("  exvex test main.cpp");
+    expect(logger.log).toHaveBeenCalledWith("  npx exvex test main.cpp");
   });
 
   it("prints overwritten init paths in the text summary", async () => {
@@ -1124,7 +1124,7 @@ describe("runCli", () => {
         preset: "test" as const,
         createdPaths: ["output.txt"],
         overwrittenPaths: ["main.cpp"],
-        nextCommand: "exvex test main.cpp",
+        nextCommand: "npx exvex test main.cpp",
       })),
     });
 
@@ -1145,7 +1145,7 @@ describe("runCli", () => {
         preset: "test" as const,
         createdPaths: ["main.cpp", "input.txt", "output.txt"],
         overwrittenPaths: [],
-        nextCommand: "exvex test main.cpp",
+        nextCommand: "npx exvex test main.cpp",
       })),
     });
 
@@ -1154,7 +1154,7 @@ describe("runCli", () => {
     );
 
     expect(logger.log).toHaveBeenCalledWith(
-      expect.stringContaining('"nextCommand": "exvex test main.cpp"'),
+      expect.stringContaining('"nextCommand": "npx exvex test main.cpp"'),
     );
   });
 
@@ -1459,7 +1459,7 @@ describe("initProject", () => {
         "input.txt",
         "output.txt",
       ]);
-      expect(summary.nextCommand).toBe("exvex test main.cpp");
+      expect(summary.nextCommand).toBe("npx exvex test main.cpp");
       expect(readFileSync(join(cwd, "main.cpp"), "utf8")).toContain(
         "#include <bits/stdc++.h>",
       );
@@ -1487,7 +1487,7 @@ describe("initProject", () => {
         "input.txt",
         "output.txt",
       ]);
-      expect(summary.nextCommand).toBe("exvex test main.cpp");
+      expect(summary.nextCommand).toBe("npx exvex test main.cpp");
       expect(readFileSync(join(cwd, "input.txt"), "utf8")).toBe("");
       expect(readFileSync(join(cwd, "output.txt"), "utf8")).toBe("");
     } finally {
@@ -1516,7 +1516,7 @@ describe("initProject", () => {
       expect(summary.createdPaths).toContain(".vscode/tasks.json");
       expect(summary.createdPaths).toContain(".gitignore");
       expect(summary.nextCommand).toBe(
-        "exvex test --input-dir=a/samples/in --output-dir=a/samples/out a/main.py",
+        "npx exvex test --input-dir=a/samples/in --output-dir=a/samples/out a/main.py",
       );
       expect(readFileSync(join(cwd, ".gitignore"), "utf8")).toContain(
         ".exvex/",
@@ -1526,7 +1526,7 @@ describe("initProject", () => {
         "utf8",
       );
       expect(tasksJson).toContain(
-        '"command": "exvex test --input-dir=samples/in --output-dir=samples/out main.py"',
+        '"command": "npx exvex test --input-dir=samples/in --output-dir=samples/out main.py"',
       );
       expect(tasksJson).toContain('"cwd": "${workspaceFolder}/a"');
       expect(
@@ -1549,7 +1549,7 @@ describe("initProject", () => {
       });
 
       expect(summary.nextCommand).toBe(
-        "exvex stress a/solution.cpp a/brute.cpp a/gen.cpp",
+        "npx exvex stress a/solution.cpp a/brute.cpp a/gen.cpp",
       );
     } finally {
       rmSync(cwd, { recursive: true, force: true });
@@ -1625,7 +1625,7 @@ describe("initProject", () => {
         "Gen.java",
       ]);
       expect(summary.nextCommand).toBe(
-        "exvex stress Solution.java Brute.java Gen.java",
+        "npx exvex stress Solution.java Brute.java Gen.java",
       );
       expect(readFileSync(join(cwd, "Solution.java"), "utf8")).toContain(
         "public class Solution",
@@ -1713,7 +1713,7 @@ describe("initProject", () => {
         entryFile: "main&1.cpp",
       });
 
-      expect(summary.nextCommand).toBe('exvex "main&1.cpp"');
+      expect(summary.nextCommand).toBe('npx exvex "main&1.cpp"');
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -1733,7 +1733,7 @@ describe("initProject", () => {
 
       expect(
         readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8"),
-      ).toContain('exvex test \\"solve&go.py\\"');
+      ).toContain('npx exvex test \\"solve&go.py\\"');
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -1755,21 +1755,21 @@ describe("initProject", () => {
 
       if (process.platform === "win32") {
         expect(summary.nextCommand).toBe(
-          'exvex test --input-dir="samples`in" --output-dir="samples$out" "solve$HOME.py"',
+          'npx exvex test --input-dir="samples`in" --output-dir="samples$out" "solve$HOME.py"',
         );
         expect(
           readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8"),
         ).toContain(
-          'exvex test --input-dir=\\"samples`in\\" --output-dir=\\"samples$out\\" \\"solve$HOME.py\\"',
+          'npx exvex test --input-dir=\\"samples`in\\" --output-dir=\\"samples$out\\" \\"solve$HOME.py\\"',
         );
       } else {
         expect(summary.nextCommand).toBe(
-          'exvex test --input-dir="samples\\`in" --output-dir="samples\\$out" "solve\\$HOME.py"',
+          'npx exvex test --input-dir="samples\\`in" --output-dir="samples\\$out" "solve\\$HOME.py"',
         );
         expect(
           readFileSync(join(cwd, ".vscode", "tasks.json"), "utf8"),
         ).toContain(
-          'exvex test --input-dir=\\"samples\\\\`in\\" --output-dir=\\"samples\\\\$out\\" \\"solve\\\\$HOME.py\\"',
+          'npx exvex test --input-dir=\\"samples\\\\`in\\" --output-dir=\\"samples\\\\$out\\" \\"solve\\\\$HOME.py\\"',
         );
       }
     } finally {
@@ -1796,7 +1796,7 @@ describe("initProject", () => {
         "utf8",
       );
       expect(tasksJson).toContain(
-        '"command": "exvex test --input-dir=samples/in --output-dir=samples/out solve.py"',
+        '"command": "npx exvex test --input-dir=samples/in --output-dir=samples/out solve.py"',
       );
       expect(readFileSync(join(cwd, "samples", "in", "1.txt"), "utf8")).toBe(
         "",

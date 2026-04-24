@@ -13,8 +13,8 @@ export function formatArg(value: string) {
 
 export function formatRunCommand(entryFile: string) {
   return entryFile.startsWith("-")
-    ? `exvex -- ${formatArg(entryFile)}`
-    : `exvex ${formatArg(entryFile)}`;
+    ? `npx exvex -- ${formatArg(entryFile)}`
+    : `npx exvex ${formatArg(entryFile)}`;
 }
 
 export function formatTestCommand(
@@ -22,7 +22,7 @@ export function formatTestCommand(
   inputDir?: string,
   outputDir?: string,
 ) {
-  const args = ["exvex", "test"];
+  const args = ["npx", "exvex", "test"];
 
   if (inputDir && inputDir !== "input" && inputDir !== "input.txt") {
     args.push(`--input-dir=${formatArg(inputDir)}`);
@@ -51,5 +51,5 @@ export function formatStressCommand(
     (file) => file.startsWith("-"),
   );
 
-  return `exvex stress${needsDoubleDash ? " --" : ""} ${args.join(" ")}`;
+  return `npx exvex stress${needsDoubleDash ? " --" : ""} ${args.join(" ")}`;
 }
