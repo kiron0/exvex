@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat, writeFile } from "fs/promises";
+import { chmod, mkdir, readFile, stat, writeFile } from "fs/promises";
 import { basename, dirname, extname, isAbsolute, join, normalize } from "path";
 import type { SupportedLanguage } from "../interface";
 import {
@@ -66,6 +66,7 @@ const DEFAULT_CONTEST_PROBLEMS = ["a", "b", "c"];
 interface PlannedFile {
   path: string;
   content: string;
+  executable?: boolean;
 }
 
 interface PlannedWorkspace {
@@ -418,8 +419,16 @@ function renderGeneratorTemplate(language: InitLanguage, filePath: string) {
   }
 }
 
-function makeFile(path: string, content: string): PlannedFile {
-  return { path, content };
+function makeFile(
+  path: string,
+  content: string,
+  options: Pick<PlannedFile, "executable"> = {},
+): PlannedFile {
+  return { path, content, ...options };
+}
+
+function renderTestLauncher(command: string) {
+  return ["#!/bin/sh", `exec ${command} "$@"`, ""].join("\n");
 }
 
 function buildSingleWorkspace(
@@ -520,13 +529,21 @@ function buildSingleWorkspace(
       );
     }
 
+    const testCommand = formatTestCommand(
+      prefix(entryFile),
+      prefix(inputDir),
+      prefix(outputDir),
+    );
+
+    files.push(
+      makeFile(prefix("test"), renderTestLauncher(testCommand), {
+        executable: true,
+      }),
+    );
+
     return {
       files,
-      nextCommand: formatTestCommand(
-        prefix(entryFile),
-        prefix(inputDir),
-        prefix(outputDir),
-      ),
+      nextCommand: testCommand,
     };
   }
 
@@ -667,6 +684,13 @@ async function validateGitignoreTarget(cwd: string) {
 }
 
 export async function initProject(request: InitRequest): Promise<InitSummary> {
+  const cwdType = await getExistingPathType(request.cwd);
+  if (cwdType === "file") {
+    throw new Error(
+      `Cannot initialize into "${request.cwd}" because a file already exists there.`,
+    );
+  }
+
   const workspacePlan = request.contest
     ? buildContestWorkspaces(request)
     : buildSingleWorkspace(request);
@@ -715,6 +739,9 @@ export async function initProject(request: InitRequest): Promise<InitSummary> {
   for (const file of files) {
     await mkdir(join(request.cwd, dirname(file.path)), { recursive: true });
     await writeFile(join(request.cwd, file.path), file.content, "utf8");
+    if (file.executable && process.platform !== "win32") {
+      await chmod(join(request.cwd, file.path), 0o755);
+    }
   }
 
   if (request.gitignore) {

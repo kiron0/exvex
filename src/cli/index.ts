@@ -1,7 +1,7 @@
 import type * as ClackPrompts from "@clack/prompts";
 import pkg from "../../package.json";
 import { realpathSync, statSync } from "fs";
-import { basename } from "path";
+import { basename, resolve } from "path";
 import type { Readable, Writable } from "stream";
 import { fileURLToPath, pathToFileURL } from "url";
 import type { JudgeSummary, RunRequest, StressSummary } from "../interface";
@@ -64,6 +64,7 @@ type ParsedCliArgs =
       command: "init";
       json?: boolean;
       language?: InitLanguage;
+      path?: string;
       preset?: InitPreset;
       force: boolean;
       yes: boolean;
@@ -278,6 +279,16 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
     return null;
   }
 
+  const rawTargetPath = await text({
+    message: "Target path",
+    placeholder: "blank for current directory",
+  });
+  if (isCancel(rawTargetPath)) {
+    outro(CANCEL_MESSAGE);
+    return null;
+  }
+  const targetPath = assertPromptString(rawTargetPath, "target path").trim();
+
   if (preset === "stress") {
     const defaults = getDefaultInitStressFiles(selectedLanguage);
 
@@ -323,6 +334,7 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
       `--solution=${solution}`,
       `--brute=${brute}`,
       `--generator=${generator}`,
+      ...(targetPath ? [targetPath] : []),
     ];
   }
 
@@ -379,6 +391,7 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
     ...(inputDir ? [`--input-dir=${inputDir}`] : []),
     ...(outputDir ? [`--output-dir=${outputDir}`] : []),
     `--entry=${selectedEntryFile}`,
+    ...(targetPath ? [targetPath] : []),
   ];
 }
 
@@ -1060,8 +1073,18 @@ function parseInitLanguage(value: string): InitLanguage {
   throw new Error(`Unsupported init language: "${value}".`);
 }
 
+function looksLikeInitPath(value: string) {
+  return (
+    value.startsWith(".") ||
+    value.startsWith("~") ||
+    value.includes("/") ||
+    value.includes("\\")
+  );
+}
+
 function parseInitArgs(args: string[]): ParsedCliArgs {
   let language: InitLanguage | undefined;
+  let path: string | undefined;
   let preset: InitPreset | undefined;
   let force = false;
   let yes = false;
@@ -1087,11 +1110,21 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
       }
 
       if (remaining.length === 1) {
-        if (language) {
+        if (!language) {
+          if (looksLikeInitPath(remaining[0]!)) {
+            path = remaining[0]!;
+            break;
+          }
+
+          language = parseInitLanguage(remaining[0]!);
+          break;
+        }
+
+        if (path) {
           throw new Error(`Unexpected argument: ${remaining[0]}`);
         }
 
-        language = parseInitLanguage(remaining[0]!);
+        path = remaining[0]!;
       }
 
       break;
@@ -1322,7 +1355,17 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
     }
 
     if (!language) {
+      if (looksLikeInitPath(arg)) {
+        path = arg;
+        continue;
+      }
+
       language = parseInitLanguage(arg);
+      continue;
+    }
+
+    if (!path) {
+      path = arg;
       continue;
     }
 
@@ -1372,6 +1415,7 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
     help: false,
     command: "init",
     language,
+    path,
     preset: resolvedPreset,
     force,
     yes,
@@ -1394,7 +1438,7 @@ Usage:
   exvex <entry> [--input=FILE] [--timeout=MS] [--no-cache]
   exvex test [entry] [--input-dir=DIR] [--output-dir=DIR] [--timeout=MS] [--no-cache]
   exvex stress <solution> <brute> <generator> [--iterations=N] [--timeout=MS] [--no-cache]
-  exvex init [language] [--preset=run|test|stress] [--contest] [--vscode] [--gitignore] [--yes] [--force]
+  exvex init [language] [path] [--preset=run|test|stress] [--contest] [--vscode] [--gitignore] [--yes] [--force]
   exvex --version
   exvex --help
 
@@ -1402,7 +1446,7 @@ Commands:
   <entry>          Run a supported source file directly
   test             Run sample tests from input/output paths
   stress           Compare a solution against a brute-force implementation
-  init             Scaffold a ready-to-use workspace
+  init             Scaffold a ready-to-use workspace in current dir or target path
 
 Options:
   --input=FILE     Feed input from a file in run mode (also: --input FILE)
@@ -1412,6 +1456,7 @@ Options:
   --preset=NAME    Init preset: run, test, or stress
   --json           Print machine-readable JSON summaries for run, test, or stress mode
   --timeout=MS     Override execution timeout in milliseconds; use 0 to disable timeout
+  [path]           Target directory for init; defaults to current directory
   --entry=FILE     Entry filename for init run/test presets
   --input-dir=DIR  Input path for judge mode and init test preset
   --output-dir=DIR Output path for judge mode and init test preset
@@ -1760,8 +1805,11 @@ export async function runCli(
     }
 
     if (parsed.command === "init") {
+      const initCwd = parsed.path
+        ? resolve(dependencies.cwd(), parsed.path)
+        : dependencies.cwd();
       const summary = await dependencies.initProject({
-        cwd: dependencies.cwd(),
+        cwd: initCwd,
         language: parsed.language ?? "cpp",
         preset: parsed.preset ?? "test",
         force: parsed.force,

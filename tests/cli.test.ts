@@ -3,6 +3,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "fs";
@@ -426,11 +427,13 @@ describe("parseCliArgs", () => {
         "--vscode",
         "--gitignore",
         "--entry=solve.py",
+        "contest/round-1/a",
       ]),
     ).toEqual({
       help: false,
       command: "init",
       language: "python",
+      path: "contest/round-1/a",
       preset: "run",
       force: false,
       yes: false,
@@ -440,6 +443,46 @@ describe("parseCliArgs", () => {
       inputDir: undefined,
       outputDir: undefined,
       entryFile: "solve.py",
+      solutionFile: undefined,
+      bruteFile: undefined,
+      generatorFile: undefined,
+    });
+  });
+
+  it("parses init target path with or without language", () => {
+    expect(parseCliArgs(["init", "sandbox/problem-a"])).toEqual({
+      help: false,
+      command: "init",
+      language: undefined,
+      path: "sandbox/problem-a",
+      preset: undefined,
+      force: false,
+      yes: false,
+      contest: false,
+      vscode: false,
+      gitignore: false,
+      inputDir: undefined,
+      outputDir: undefined,
+      entryFile: undefined,
+      solutionFile: undefined,
+      bruteFile: undefined,
+      generatorFile: undefined,
+    });
+
+    expect(parseCliArgs(["init", "cpp", "sandbox/problem-b"])).toEqual({
+      help: false,
+      command: "init",
+      language: "cpp",
+      path: "sandbox/problem-b",
+      preset: undefined,
+      force: false,
+      yes: false,
+      contest: false,
+      vscode: false,
+      gitignore: false,
+      inputDir: undefined,
+      outputDir: undefined,
+      entryFile: undefined,
       solutionFile: undefined,
       bruteFile: undefined,
       generatorFile: undefined,
@@ -653,7 +696,7 @@ describe("getHelpText", () => {
     expect(helpText).toContain("exvex <entry>");
     expect(helpText).toContain("exvex test [entry]");
     expect(helpText).toContain("exvex stress <solution> <brute> <generator>");
-    expect(helpText).toContain("exvex init [language]");
+    expect(helpText).toContain("exvex init [language] [path]");
     expect(helpText).toContain("exvex --version");
     expect(helpText).toContain("exvex.config.json");
     expect(helpText).toContain("use 0 to disable timeout");
@@ -1131,6 +1174,21 @@ describe("runCli", () => {
     expect(logger.log).toHaveBeenCalledWith("  npx exvex test main.cpp");
   });
 
+  it("resolves init target path relative to current cwd", async () => {
+    const { dependencies } = createDependencies();
+
+    await expect(
+      runCli(["init", "cpp", "nested/problem-a"], dependencies),
+    ).resolves.toBe(0);
+
+    expect(dependencies.initProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: join(PROJECT_DIR, "nested/problem-a"),
+        language: "cpp",
+      }),
+    );
+  });
+
   it("prints overwritten init paths in the text summary", async () => {
     const { dependencies, logger } = createDependencies({
       initProject: vi.fn(async () => ({
@@ -1489,6 +1547,7 @@ describe("initProject", () => {
         "main.cpp",
         "input.txt",
         "output.txt",
+        "test",
       ]);
       expect(summary.nextCommand).toBe("npx exvex test main.cpp");
       expect(readFileSync(join(cwd, "main.cpp"), "utf8")).toContain(
@@ -1496,6 +1555,12 @@ describe("initProject", () => {
       );
       expect(readFileSync(join(cwd, "input.txt"), "utf8")).toBe("");
       expect(readFileSync(join(cwd, "output.txt"), "utf8")).toBe("");
+      expect(readFileSync(join(cwd, "test"), "utf8")).toBe(
+        '#!/bin/sh\nexec npx exvex test main.cpp "$@"\n',
+      );
+      if (process.platform !== "win32") {
+        expect(statSync(join(cwd, "test")).mode & 0o111).not.toBe(0);
+      }
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -1517,6 +1582,7 @@ describe("initProject", () => {
         "main.cpp",
         "input.txt",
         "output.txt",
+        "test",
       ]);
       expect(summary.nextCommand).toBe("npx exvex test main.cpp");
       expect(readFileSync(join(cwd, "input.txt"), "utf8")).toBe("");
@@ -1544,6 +1610,9 @@ describe("initProject", () => {
       expect(summary.createdPaths).toContain("a/main.py");
       expect(summary.createdPaths).toContain("b/main.py");
       expect(summary.createdPaths).toContain("c/main.py");
+      expect(summary.createdPaths).toContain("a/test");
+      expect(summary.createdPaths).toContain("b/test");
+      expect(summary.createdPaths).toContain("c/test");
       expect(summary.createdPaths).toContain(".vscode/tasks.json");
       expect(summary.createdPaths).toContain(".gitignore");
       expect(summary.nextCommand).toBe(
@@ -1640,6 +1709,26 @@ describe("initProject", () => {
     }
   });
 
+  it("rejects target cwd when it points to a file", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-target-file-"));
+    const targetFile = join(cwd, "target.txt");
+    writeFileSync(targetFile, "nope\n");
+
+    try {
+      await expect(
+        initProject({
+          cwd: targetFile,
+          language: "cpp",
+          preset: "run",
+        }),
+      ).rejects.toThrow(
+        `Cannot initialize into "${targetFile}" because a file already exists there.`,
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("creates stress scaffold files for java", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "exvex-init-stress-"));
 
@@ -1726,7 +1815,7 @@ describe("initProject", () => {
         force: true,
       });
 
-      expect(summary.createdPaths).toEqual(["output.txt"]);
+      expect(summary.createdPaths).toEqual(["output.txt", "test"]);
       expect(summary.overwrittenPaths).toEqual(["main.py", "input.txt"]);
     } finally {
       rmSync(cwd, { recursive: true, force: true });

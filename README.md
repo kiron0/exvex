@@ -62,19 +62,25 @@ npx exvex init cpp --stress
 npx exvex init cpp --test --yes
 npx exvex init java --preset=stress --force
 npx exvex init cpp --json
+npx exvex init cpp a
+npx exvex init contest/round-1/a
 npx exvex init cpp --contest --vscode --gitignore
 npx exvex init cpp --input-dir=samples/in --output-dir=samples/out
+
+# After test init, run sample judge fast
+./test
 ```
 
-`npx exvex init` scaffolds starter files so users do not need to hand-create `main.*`, sample files, or stress-test files.
+`npx exvex init` scaffolds starter files so users do not need to hand-create `main.*`, sample files, stress-test files, or a local test launcher.
 
 - Default preset is `test`
 - Bare `npx exvex init` in an interactive terminal opens a wizard
-- `test` preset creates `main.*`, `input.txt`, and `output.txt` by default
+- `test` preset creates `main.*`, `input.txt`, `output.txt`, and executable `./test` by default
 - `stress` preset creates `solution.*`, `brute.*`, and `gen.*`
 - `--run`, `--test`, and `--stress` are shortcuts for `--preset=...`
 - `--yes` accepts init defaults without prompting
 - `--json` prints machine-readable scaffold summary for editor/extensions
+- optional trailing init path chooses target directory; default is current directory
 - `--contest` creates `a/`, `b/`, and `c/` problem folders
 - `--vscode` generates `.vscode/tasks.json` using normalized scaffold paths; contest tasks run from `a/` via VS Code `cwd`
 - `--gitignore` appends `.exvex/` to `.gitignore`
@@ -160,6 +166,7 @@ On first mismatch or runtime failure, exvex writes failing input, both outputs, 
 - `--contest`: scaffold `a/`, `b/`, `c/` problem folders during init
 - `--vscode`: generate `.vscode/tasks.json` during init
 - `--gitignore`: append `.exvex/` to `.gitignore` during init
+- `[path]`: init target directory; defaults to current directory
 - `--entry FILE`: init entry filename for run/test presets
 - `--input-dir DIR`, `--output-dir DIR`: init custom sample paths for test preset
 - `--solution FILE`, `--brute FILE`, `--generator FILE`: init stress filenames
