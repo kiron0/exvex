@@ -949,6 +949,66 @@ describe("runCli", () => {
     expect(logger.log).toHaveBeenCalledWith(expect.stringContaining("Usage:"));
   });
 
+  it("validates interactive file paths relative to dependency cwd", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-interactive-run-cwd-"));
+    writeFileSync(join(cwd, "main.cpp"), "int main() { return 0; }\n");
+
+    const text = vi
+      .fn()
+      .mockImplementationOnce(async (options: { validate?: (value: string) => string | undefined }) => {
+        const value = "main.cpp";
+        const error = options.validate?.(value);
+        if (error) {
+          throw new Error(error);
+        }
+        return value;
+      })
+      .mockImplementationOnce(async (options: { validate?: (value: string) => string | undefined }) => {
+        const value = "";
+        const error = options.validate?.(value);
+        if (error) {
+          throw new Error(error);
+        }
+        return value;
+      })
+      .mockImplementationOnce(async (options: { validate?: (value: string) => string | undefined }) => {
+        const value = "";
+        const error = options.validate?.(value);
+        if (error) {
+          throw new Error(error);
+        }
+        return value;
+      });
+
+    setPromptModuleLoaderForTests(async () => ({
+      intro: () => undefined,
+      log: { message: () => undefined },
+      outro: () => undefined,
+      isCancel: () => false,
+      select: vi.fn().mockResolvedValueOnce("run"),
+      confirm: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(false),
+      text,
+    }) as never);
+
+    const { dependencies } = createDependencies({
+      cwd: () => cwd,
+      isTty: true,
+      promptForArgs: undefined,
+    });
+
+    try {
+      await expect(runCli([], dependencies)).resolves.toBe(0);
+
+      expect(dependencies.runFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entryFile: "main.cpp",
+        }),
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("uses init wizard when launched as bare init in a TTY", async () => {
     const { dependencies } = createDependencies({
       isTty: true,
@@ -1230,6 +1290,17 @@ describe("runCli", () => {
 
     expect(logger.log).toHaveBeenCalledWith(
       expect.stringContaining('"nextCommand": "npx exvex@latest test main.cpp"'),
+    );
+  });
+
+  it("documents init JSON support in help text", () => {
+    const helpText = getHelpText();
+
+    expect(helpText).toContain(
+      "exvex init [language] [path] [--preset=run|test|stress] [--contest] [--vscode] [--gitignore] [--yes] [--force] [--json]",
+    );
+    expect(helpText).toContain(
+      "--json           Print machine-readable JSON summaries for run, test, stress, or init mode",
     );
   });
 

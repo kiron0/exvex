@@ -396,7 +396,7 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
 }
 
 /** Returns the collected CLI args, or `null` if the user cancelled. */
-async function promptForInteractiveArgs(): Promise<string[] | null> {
+async function promptForInteractiveArgs(cwd: string): Promise<string[] | null> {
   const { confirm, intro, isCancel, log, outro, select, text } =
     await loadPrompts();
 
@@ -451,7 +451,7 @@ async function promptForInteractiveArgs(): Promise<string[] | null> {
 
   const statOf = (p: string) => {
     try {
-      return statSync(p);
+      return statSync(resolve(cwd, p));
     } catch {
       return null;
     }
@@ -1082,6 +1082,26 @@ function looksLikeInitPath(value: string) {
   );
 }
 
+const INIT_VALUE_RESERVED_OPTIONS = [
+  "--entry",
+  "--input-dir",
+  "--output-dir",
+  "--solution",
+  "--brute",
+  "--generator",
+  "--preset",
+  "--run",
+  "--test",
+  "--stress",
+  "--contest",
+  "--vscode",
+  "--gitignore",
+  "--json",
+  "--yes",
+  "--force",
+  "--",
+];
+
 function parseInitArgs(args: string[]): ParsedCliArgs {
   let language: InitLanguage | undefined;
   let path: string | undefined;
@@ -1184,25 +1204,7 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const entryOption = parseOptionValue(args, index, "--entry", {
       allowDashPrefixed: true,
-      reservedOptions: [
-        "--entry",
-        "--input-dir",
-        "--output-dir",
-        "--solution",
-        "--brute",
-        "--generator",
-        "--preset",
-        "--run",
-        "--test",
-        "--stress",
-        "--contest",
-        "--vscode",
-        "--gitignore",
-        "--json",
-        "--yes",
-        "--force",
-        "--",
-      ],
+      reservedOptions: INIT_VALUE_RESERVED_OPTIONS,
     });
     if (entryOption) {
       entryFile = entryOption.value;
@@ -1212,25 +1214,7 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const inputDirOption = parseOptionValue(args, index, "--input-dir", {
       allowDashPrefixed: true,
-      reservedOptions: [
-        "--entry",
-        "--input-dir",
-        "--output-dir",
-        "--solution",
-        "--brute",
-        "--generator",
-        "--preset",
-        "--run",
-        "--test",
-        "--stress",
-        "--contest",
-        "--vscode",
-        "--gitignore",
-        "--json",
-        "--yes",
-        "--force",
-        "--",
-      ],
+      reservedOptions: INIT_VALUE_RESERVED_OPTIONS,
     });
     if (inputDirOption) {
       inputDir = inputDirOption.value;
@@ -1240,25 +1224,7 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const outputDirOption = parseOptionValue(args, index, "--output-dir", {
       allowDashPrefixed: true,
-      reservedOptions: [
-        "--entry",
-        "--input-dir",
-        "--output-dir",
-        "--solution",
-        "--brute",
-        "--generator",
-        "--preset",
-        "--run",
-        "--test",
-        "--stress",
-        "--contest",
-        "--vscode",
-        "--gitignore",
-        "--json",
-        "--yes",
-        "--force",
-        "--",
-      ],
+      reservedOptions: INIT_VALUE_RESERVED_OPTIONS,
     });
     if (outputDirOption) {
       outputDir = outputDirOption.value;
@@ -1268,25 +1234,7 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const solutionOption = parseOptionValue(args, index, "--solution", {
       allowDashPrefixed: true,
-      reservedOptions: [
-        "--entry",
-        "--input-dir",
-        "--output-dir",
-        "--solution",
-        "--brute",
-        "--generator",
-        "--preset",
-        "--run",
-        "--test",
-        "--stress",
-        "--contest",
-        "--vscode",
-        "--gitignore",
-        "--json",
-        "--yes",
-        "--force",
-        "--",
-      ],
+      reservedOptions: INIT_VALUE_RESERVED_OPTIONS,
     });
     if (solutionOption) {
       solutionFile = solutionOption.value;
@@ -1296,25 +1244,7 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const bruteOption = parseOptionValue(args, index, "--brute", {
       allowDashPrefixed: true,
-      reservedOptions: [
-        "--entry",
-        "--input-dir",
-        "--output-dir",
-        "--solution",
-        "--brute",
-        "--generator",
-        "--preset",
-        "--run",
-        "--test",
-        "--stress",
-        "--contest",
-        "--vscode",
-        "--gitignore",
-        "--json",
-        "--yes",
-        "--force",
-        "--",
-      ],
+      reservedOptions: INIT_VALUE_RESERVED_OPTIONS,
     });
     if (bruteOption) {
       bruteFile = bruteOption.value;
@@ -1324,25 +1254,7 @@ function parseInitArgs(args: string[]): ParsedCliArgs {
 
     const generatorOption = parseOptionValue(args, index, "--generator", {
       allowDashPrefixed: true,
-      reservedOptions: [
-        "--entry",
-        "--input-dir",
-        "--output-dir",
-        "--solution",
-        "--brute",
-        "--generator",
-        "--preset",
-        "--run",
-        "--test",
-        "--stress",
-        "--contest",
-        "--vscode",
-        "--gitignore",
-        "--json",
-        "--yes",
-        "--force",
-        "--",
-      ],
+      reservedOptions: INIT_VALUE_RESERVED_OPTIONS,
     });
     if (generatorOption) {
       generatorFile = generatorOption.value;
@@ -1438,7 +1350,7 @@ Usage:
   exvex <entry> [--input=FILE] [--timeout=MS] [--no-cache]
   exvex test [entry] [--input-dir=DIR] [--output-dir=DIR] [--timeout=MS] [--no-cache]
   exvex stress <solution> <brute> <generator> [--iterations=N] [--timeout=MS] [--no-cache]
-  exvex init [language] [path] [--preset=run|test|stress] [--contest] [--vscode] [--gitignore] [--yes] [--force]
+  exvex init [language] [path] [--preset=run|test|stress] [--contest] [--vscode] [--gitignore] [--yes] [--force] [--json]
   exvex --version
   exvex --help
 
@@ -1454,7 +1366,7 @@ Options:
   --output-dir=DIR Output path for judge mode (also: --output-dir DIR)
   --iterations=N   Number of stress iterations (default: 100; also: --iterations N)
   --preset=NAME    Init preset: run, test, or stress
-  --json           Print machine-readable JSON summaries for run, test, or stress mode
+  --json           Print machine-readable JSON summaries for run, test, stress, or init mode
   --timeout=MS     Override execution timeout in milliseconds; use 0 to disable timeout
   [path]           Target directory for init; defaults to current directory
   --entry=FILE     Entry filename for init run/test presets
@@ -1715,7 +1627,7 @@ export async function runCli(
     if (args.length === 0 && dependencies.isTty) {
       const interactiveArgs = await (dependencies.promptForArgs
         ? dependencies.promptForArgs()
-        : promptForInteractiveArgs());
+        : promptForInteractiveArgs(dependencies.cwd()));
 
       // null means the user cancelled the interactive prompt
       if (interactiveArgs === null) {
