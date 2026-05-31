@@ -2054,6 +2054,45 @@ describe("initProject", () => {
     }
   });
 
+  it("rejects scaffold plans where a file path is also a parent directory", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-file-dir-overlap-"));
+
+    try {
+      await expect(
+        initProject({
+          cwd,
+          language: "cpp",
+          preset: "test",
+          entryFile: "test/main.cpp",
+        }),
+      ).rejects.toThrow(
+        'Scaffold path collision: "test" cannot be both a file and a parent directory.',
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects sample directories that collide with launcher path", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "exvex-init-launcher-overlap-"));
+
+    try {
+      await expect(
+        initProject({
+          cwd,
+          language: "cpp",
+          preset: "test",
+          inputDir: "test",
+          outputDir: "out",
+        }),
+      ).rejects.toThrow(
+        'Scaffold path collision: "test" cannot be both a file and a parent directory.',
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("rejects vscode scaffold when .vscode path is a file", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "exvex-init-vscode-parent-"));
     writeFileSync(join(cwd, ".vscode"), "occupied\n");

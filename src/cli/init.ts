@@ -683,6 +683,26 @@ async function validateGitignoreTarget(cwd: string) {
   }
 }
 
+function assertNoPlannedPathCollisions(files: PlannedFile[]) {
+  const filePaths = new Set(files.map((file) => file.path));
+
+  for (const file of files) {
+    const segments = normalize(file.path)
+      .split(/[\\/]+/)
+      .filter(Boolean);
+
+    for (let index = 0; index < segments.length - 1; index += 1) {
+      const parentPath = segments.slice(0, index + 1).join("/");
+
+      if (filePaths.has(parentPath)) {
+        throw new Error(
+          `Scaffold path collision: "${parentPath}" cannot be both a file and a parent directory.`,
+        );
+      }
+    }
+  }
+}
+
 export async function initProject(request: InitRequest): Promise<InitSummary> {
   const cwdType = await getExistingPathType(request.cwd);
   if (cwdType === "file") {
@@ -704,6 +724,7 @@ export async function initProject(request: InitRequest): Promise<InitSummary> {
   if (uniquePaths.size !== files.length) {
     throw new Error("Scaffold plan produced duplicate file paths.");
   }
+  assertNoPlannedPathCollisions(files);
 
   if (request.gitignore) {
     await validateGitignoreTarget(request.cwd);
