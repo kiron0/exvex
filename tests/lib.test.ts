@@ -2052,6 +2052,38 @@ describe("runFile", () => {
     SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
   );
 
+  javaIt(
+    "removes staged java source copies after compiling extensionless entries",
+    async () => {
+      const directory = await createTempDir("exvex-java-cache-cleanup-");
+      const entryPath = join(directory, "solution");
+
+      await writeFile(
+        entryPath,
+        [
+          "public class Main {",
+          "  public static void main(String[] args) {",
+          '    System.out.println("java-clean");',
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "solution",
+        timeoutMs: 15000,
+        useCache: true,
+      });
+
+      expect(result.exitCode).toBe(0);
+      await expect(
+        stat(join(result.artifactPath ?? "", "java-src")),
+      ).rejects.toThrow();
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
+
   it("detects extensionless Java files when main modifiers use a different valid order", async () => {
     const directory = await createTempDir(
       "exvex-java-extensionless-modifiers-",
@@ -2122,6 +2154,32 @@ describe("runFile", () => {
       expect(result.language).toBe("kotlin");
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("kt-extensionless-ok");
+    },
+    SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
+  );
+
+  kotlinIt(
+    "removes staged kotlin source copies after compiling extensionless entries",
+    async () => {
+      const directory = await createTempDir("exvex-kotlin-cache-cleanup-");
+      const entryPath = join(directory, "Main");
+
+      await writeFile(
+        entryPath,
+        ["fun main() {", '    println("kt-clean")', "}"].join("\n"),
+      );
+
+      const result = await runFile({
+        cwd: directory,
+        entryFile: "Main",
+        timeoutMs: 15000,
+        useCache: true,
+      });
+
+      expect(result.exitCode).toBe(0);
+      await expect(
+        stat(join(result.artifactPath ?? "", "kotlin-src")),
+      ).rejects.toThrow();
     },
     SLOW_TOOLCHAIN_TEST_TIMEOUT_MS,
   );

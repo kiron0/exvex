@@ -733,8 +733,17 @@ async function runProcess({
       stderr += value;
       stderrStream?.write(chunk);
     });
-    child.stdin?.on("error", () => {
-      // Ignore EPIPE when a process exits before all input is written.
+    child.stdin?.on("error", (error) => {
+      if ((error as NodeJS.ErrnoException).code === "EPIPE") {
+        return;
+      }
+
+      terminateChild();
+      finish(() => {
+        rejectPromise(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      });
     });
 
     child.once("close", (exitCode) => {
@@ -1175,12 +1184,22 @@ async function prepareKotlinExecution({
       "-d",
       artifactPath,
     ];
-    const compileResult = await runProcess({
-      command: compileParts[0],
-      args: compileArgs,
-      cwd: compileCwd,
-      timeoutMs: compileTimeoutMs,
-    });
+    let compileResult: ProcessRunResult;
+    try {
+      compileResult = await runProcess({
+        command: compileParts[0],
+        args: compileArgs,
+        cwd: compileCwd,
+        timeoutMs: compileTimeoutMs,
+      });
+    } finally {
+      if (compileInput) {
+        await rm(compileInput.stagedSourceDir, {
+          recursive: true,
+          force: true,
+        });
+      }
+    }
 
     if (compileResult.timedOut || compileResult.exitCode !== 0) {
       await cleanupTempArtifacts(
@@ -1270,17 +1289,28 @@ async function prepareJavaExecution({
     const compileSourceFiles = compileInput?.stagedSourceFiles ?? sourceFiles;
     const compileCwd = compileInput?.stagedSourceDir ?? cwd;
 
-    const compileResult = await runProcess({
-      command: compileParts[0],
-      args: [
-        ...compileParts.slice(1),
-        "-d",
-        artifactDir,
-        ...compileSourceFiles,
-      ],
-      cwd: compileCwd,
-      timeoutMs: compileTimeoutMs,
-    });
+    const compileArgs = [
+      ...compileParts.slice(1),
+      "-d",
+      artifactDir,
+      ...compileSourceFiles,
+    ];
+    let compileResult: ProcessRunResult;
+    try {
+      compileResult = await runProcess({
+        command: compileParts[0],
+        args: compileArgs,
+        cwd: compileCwd,
+        timeoutMs: compileTimeoutMs,
+      });
+    } finally {
+      if (compileInput) {
+        await rm(compileInput.stagedSourceDir, {
+          recursive: true,
+          force: true,
+        });
+      }
+    }
 
     if (compileResult.timedOut || compileResult.exitCode !== 0) {
       await cleanupTempArtifacts(
@@ -1291,13 +1321,7 @@ async function prepareJavaExecution({
       throw new Error(
         getProcessFailureMessage(
           "Compilation (java)",
-          [
-            compileParts[0],
-            ...compileParts.slice(1),
-            "-d",
-            artifactDir,
-            ...compileSourceFiles,
-          ],
+          [compileParts[0], ...compileArgs],
           compileResult,
         ),
       );
