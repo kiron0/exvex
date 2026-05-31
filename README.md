@@ -158,7 +158,7 @@ On first mismatch or runtime failure, exvex writes failing input, both outputs, 
 - `--iterations N` or `--iterations=N`: set stress-test iteration count, default `100`
 - `--preset NAME` or `--preset=NAME`: init preset, one of `run`, `test`, `stress`
 - `--run`, `--test`, `--stress`: init preset shortcuts for `run`, `test`, `stress`
-- `--json`: print machine-readable JSON for run, judge, or stress mode
+- `--json`: print machine-readable JSON for run, judge, stress, or init mode
 - `--timeout MS` or `--timeout=MS`: set timeout in milliseconds, default `2000`
 - `--timeout 0`: disable timeout entirely
 - Compile steps use at least 30000ms unless timeout is disabled; the configured timeout still applies to program execution.

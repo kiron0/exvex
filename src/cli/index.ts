@@ -115,7 +115,6 @@ let promptModuleLoader: () => Promise<PromptModule> = () =>
   import("@clack/prompts");
 
 async function loadPrompts(): Promise<PromptModule> {
-  // Keep prompts bundled into dist/index.js. Published package has zero runtime deps.
   promptModulePromise ??= promptModuleLoader().catch((error) => {
     promptModulePromise = undefined;
     throw error;
@@ -395,7 +394,6 @@ async function promptForInitCommandArgs(): Promise<string[] | null> {
   ];
 }
 
-/** Returns the collected CLI args, or `null` if the user cancelled. */
 async function promptForInteractiveArgs(cwd: string): Promise<string[] | null> {
   const { confirm, intro, isCancel, log, outro, select, text } =
     await loadPrompts();
@@ -457,7 +455,6 @@ async function promptForInteractiveArgs(cwd: string): Promise<string[] | null> {
     }
   };
 
-  /** Required field that must point to an existing regular file. */
   const validateRequiredFile = (v: string | undefined): string | undefined => {
     if (!v) return "Required.";
     const s = statOf(v);
@@ -466,7 +463,6 @@ async function promptForInteractiveArgs(cwd: string): Promise<string[] | null> {
     return undefined;
   };
 
-  /** Optional field — skipped when blank; checks existence when provided. */
   const validateOptionalFile = (v: string | undefined): string | undefined => {
     if (!v) return undefined;
     const s = statOf(v);
@@ -475,7 +471,6 @@ async function promptForInteractiveArgs(cwd: string): Promise<string[] | null> {
     return undefined;
   };
 
-  /** Optional directory field — skipped when blank; checks existence when provided. */
   const validateOptionalSamplePath = (
     v: string | undefined,
   ): string | undefined => {
@@ -628,7 +623,6 @@ async function promptForInteractiveArgs(cwd: string): Promise<string[] | null> {
     ];
   }
 
-  // run mode
   const entry = await text({
     message: "Entry file",
     validate: validateRequiredFile,
@@ -1629,7 +1623,6 @@ export async function runCli(
         ? dependencies.promptForArgs()
         : promptForInteractiveArgs(dependencies.cwd()));
 
-      // null means the user cancelled the interactive prompt
       if (interactiveArgs === null) {
         return 0;
       }

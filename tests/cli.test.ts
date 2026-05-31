@@ -955,40 +955,58 @@ describe("runCli", () => {
 
     const text = vi
       .fn()
-      .mockImplementationOnce(async (options: { validate?: (value: string) => string | undefined }) => {
-        const value = "main.cpp";
-        const error = options.validate?.(value);
-        if (error) {
-          throw new Error(error);
-        }
-        return value;
-      })
-      .mockImplementationOnce(async (options: { validate?: (value: string) => string | undefined }) => {
-        const value = "";
-        const error = options.validate?.(value);
-        if (error) {
-          throw new Error(error);
-        }
-        return value;
-      })
-      .mockImplementationOnce(async (options: { validate?: (value: string) => string | undefined }) => {
-        const value = "";
-        const error = options.validate?.(value);
-        if (error) {
-          throw new Error(error);
-        }
-        return value;
-      });
+      .mockImplementationOnce(
+        async (options: {
+          validate?: (value: string) => string | undefined;
+        }) => {
+          const value = "main.cpp";
+          const error = options.validate?.(value);
+          if (error) {
+            throw new Error(error);
+          }
+          return value;
+        },
+      )
+      .mockImplementationOnce(
+        async (options: {
+          validate?: (value: string) => string | undefined;
+        }) => {
+          const value = "";
+          const error = options.validate?.(value);
+          if (error) {
+            throw new Error(error);
+          }
+          return value;
+        },
+      )
+      .mockImplementationOnce(
+        async (options: {
+          validate?: (value: string) => string | undefined;
+        }) => {
+          const value = "";
+          const error = options.validate?.(value);
+          if (error) {
+            throw new Error(error);
+          }
+          return value;
+        },
+      );
 
-    setPromptModuleLoaderForTests(async () => ({
-      intro: () => undefined,
-      log: { message: () => undefined },
-      outro: () => undefined,
-      isCancel: () => false,
-      select: vi.fn().mockResolvedValueOnce("run"),
-      confirm: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(false),
-      text,
-    }) as never);
+    setPromptModuleLoaderForTests(
+      async () =>
+        ({
+          intro: () => undefined,
+          log: { message: () => undefined },
+          outro: () => undefined,
+          isCancel: () => false,
+          select: vi.fn().mockResolvedValueOnce("run"),
+          confirm: vi
+            .fn()
+            .mockResolvedValueOnce(false)
+            .mockResolvedValueOnce(false),
+          text,
+        }) as never,
+    );
 
     const { dependencies } = createDependencies({
       cwd: () => cwd,
@@ -1289,7 +1307,9 @@ describe("runCli", () => {
     );
 
     expect(logger.log).toHaveBeenCalledWith(
-      expect.stringContaining('"nextCommand": "npx exvex@latest test main.cpp"'),
+      expect.stringContaining(
+        '"nextCommand": "npx exvex@latest test main.cpp"',
+      ),
     );
   });
 

@@ -682,7 +682,6 @@ async function runProcess({
       }
     };
 
-    // timeoutMs === 0 means no timeout (infinite wait).
     const timeoutHandle =
       timeoutMs > 0
         ? setTimeout(() => {
@@ -892,10 +891,6 @@ async function getCompilationSourceFiles(
     return true;
   });
 
-  // Always include the entry file itself. Content-based detection can identify
-  // a file as Go/Java/Kotlin even when it lacks the standard extension, and the
-  // extension-based scan above would silently omit it, causing either a
-  // misleading "No sources found" error or compilation of the wrong file set.
   return [...new Set([...scannedFiles, entryPath])].sort();
 }
 

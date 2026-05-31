@@ -7,7 +7,6 @@ export function formatArg(value: string) {
     return JSON.stringify(value);
   }
 
-  // POSIX shells still expand $, `, ", and \ inside double quotes.
   return `"${value.replace(/["\\$`]/g, "\\$&")}"`;
 }
 
